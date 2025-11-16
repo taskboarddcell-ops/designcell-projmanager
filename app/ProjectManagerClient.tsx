@@ -2578,16 +2578,16 @@ export default function ProjectManagerClient() {
 
   // Per-substage assign UI (uses projectUsersCache)
   function wireSubstageAssignUI(proj: any) {
-    if (!proj) return;
+  if (!proj) return;
 
-    const panel = el('stAssignPanel');
-    if (!panel) return;
+  const panel = el('stAssignPanel');
+  if (!panel) return;
 
-    const stageSel = el('stAssignStageSel') as HTMLSelectElement | null;
-    const subSel = el('stAssignSubSel') as HTMLSelectElement | null;
-    const assignList = el('stAssignUserMulti');
-    const assignBtn = el('stAssignBtn');
-    const closeBtn = el('stAssignClose');
+  const stageSel = el('stAssignStageSel') as HTMLInputElement | null;
+  const subSel = el('stAssignSubSel') as HTMLInputElement | null;
+  const assignList = el('stAssignUserMulti');
+  const assignBtn = el('stAssignBtn');
+  const closeBtn = el('stAssignClose');
 
     let selectedExistingTask: any = null;
 
