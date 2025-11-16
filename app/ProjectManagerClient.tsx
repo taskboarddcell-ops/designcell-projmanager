@@ -466,6 +466,38 @@ const staticHtml = `
     </div>
   </div>
 
+  <!-- STAGE / SUB-STAGE ASSIGN PANEL -->
+  <div id="stAssignPanel" class="modal">
+    <div class="mc" style="max-width:480px">
+      <h3 style="margin:0 0 8px 0">Assign / Update Task</h3>
+
+      <div class="grid2" style="margin-bottom:8px">
+        <div>
+          <label class="small muted">Stage</label>
+          <input id="stAssignStageSel" class="input" readonly />
+        </div>
+        <div>
+          <label class="small muted">Sub-stage</label>
+          <input id="stAssignSubSel" class="input" readonly />
+        </div>
+      </div>
+
+      <div style="margin-bottom:8px">
+        <label class="small muted">Assign to (check)</label>
+        <div
+          id="stAssignUserMulti"
+          class="list"
+          style="max-height:220px;overflow:auto;border:1px solid #e5e7eb;padding:6px;border-radius:4px;background:#f8fafc"
+        ></div>
+      </div>
+
+      <div class="right" style="margin-top:8px">
+        <button id="stAssignClose" class="btn">Cancel</button>
+        <button id="stAssignBtn" class="btn btn-primary">Create Task</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast -->
   <div id="toast" class="card" style="position:fixed;left:50%;top:12px;transform:translateX(-50%);display:none;z-index:60;padding:8px 12px">OK</div>
 
