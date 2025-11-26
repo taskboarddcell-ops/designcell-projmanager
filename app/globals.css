@@ -200,10 +200,26 @@
 
     /* ===== Kanban ===== */
     .kanban{ display:grid; grid-template-columns: repeat(3, 1fr); gap:16px; }
+    .kcol{ background:var(--paper); border:2px solid var(--line-strong); border-radius:var(--radius-0); }
     .kcol .khead{
-      background:#eef2f6; border:2px solid var(--line-strong); padding:10px 12px;
-      font-weight:700; border-radius:var(--radius-0);
-      display:flex; align-items:center; gap:8px;
+      background:#eef2f6; border-bottom:2px solid var(--line-strong); padding:10px 12px;
+      font-weight:700; 
+      display:flex; align-items:center; justify-content:space-between;
+    }
+    .khead-title {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .kcount {
+      background: var(--accent);
+      color: var(--accent-ink);
+      border-radius: 12px;
+      padding: 2px 8px;
+      font-size: 12px;
+      font-weight: 700;
+      min-width: 20px;
+      text-align: center;
     }
     /* tiny priority color tabs in headers (optional markup hook: .khead .kchip) */
     .kchip{ width:10px; height:10px; display:inline-block; border:2px solid var(--line-strong); }
@@ -212,11 +228,11 @@
     .kchip.low{ background:#84cc16; }
 
     .kdrop{
-      margin-top:10px; min-height:420px; background:#fff;
-      border:2px solid var(--line-strong); padding:14px; border-radius:var(--radius-0);
+      margin-top:0; min-height:420px; background:#fff;
+      padding:14px; 
       transition: background .15s ease, border-color .15s ease;
     }
-    .kdrop.drag-over{
+    .kdrop.drag-over, .kdrop.kdrop-hover{
       background:#f0f7ff;
       border-color:#1e40af;
       outline:2px dashed #1e40af; outline-offset:2px;
@@ -227,6 +243,8 @@
       border-radius:var(--radius-0);
       position:relative;
       transition: transform .12s ease, box-shadow .12s ease;
+      cursor: pointer;
+      touch-action: manipulation;
     }
     /* left priority stripe based on [data-priority] */
     .kcard::before{
@@ -242,6 +260,26 @@
       transform: rotate(.3deg) scale(1.01);
       box-shadow: 0 4px 18px rgba(2,6,23,.12);
       opacity:.95;
+    }
+
+    .kcard:hover{
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+
+    .chip-assignee {
+      background: #e0f2fe;
+      border-color: #0284c7;
+      color: #0369a1;
+      font-size: 11px;
+      padding: 2px 6px;
+    }
+
+    .assignee-line {
+      display: flex;
+      gap: 4px;
+      flex-wrap: wrap;
+      margin: 4px 0;
     }
 
     /* ===== Modals ===== */
@@ -279,11 +317,161 @@
     .spacer{ flex:1 1 auto; }
 
     @media (max-width: 980px){
-      .app{ grid-template-columns: 240px 1fr; }
+      .app{ 
+        grid-template-columns: 1fr; 
+        grid-template-rows: auto 1fr;
+        position: relative;
+      }
+      
+      .sidebar {
+        position: fixed;
+        top: 0;
+        left: -100%;
+        width: 280px;
+        height: 100vh;
+        z-index: 1000;
+        transition: left 0.3s ease;
+        box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+      }
+      
+      .sidebar.mobile-open {
+        left: 0;
+      }
+      
+      .main {
+        grid-column: 1;
+        grid-row: 2;
+        position: relative;
+      }
+      
+      .mobile-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 16px;
+        background: var(--paper);
+        border-bottom: 2px solid var(--line-strong);
+        grid-column: 1;
+        grid-row: 1;
+      }
+      
+      .mobile-menu-btn {
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 8px;
+        border-radius: 4px;
+        color: var(--ink);
+        font-size: 18px;
+        font-weight: 600;
+      }
+      
+      .mobile-menu-btn:hover {
+        background: #f1f5f9;
+      }
+      
+      .mobile-title {
+        font-weight: 700;
+        font-size: 16px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      
+      .mobile-title img {
+        height: 20px;
+      }
+      
+      .mobile-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.5);
+        z-index: 999;
+        opacity: 0;
+        visibility: hidden;
+        transition: all 0.3s ease;
+      }
+      
+      .mobile-overlay.active {
+        opacity: 1;
+        visibility: visible;
+      }
+      
       .grid3{ grid-template-columns:1fr; }
       .grid2{ grid-template-columns:1fr; }
       #stagePlanEditor{ max-height:58vh; }
       #assigneesBox{ max-height:50vh; }
+      
+      /* Better table responsiveness */
+      .table-wrap {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+      
+      table {
+        min-width: 600px;
+      }
+      
+      /* Kanban mobile improvements */
+      .kanban {
+        grid-template-columns: 1fr;
+        gap: 16px;
+        padding-bottom: 20px;
+      }
+      
+      .kcol {
+        min-width: unset;
+        width: 100%;
+      }
+      
+      .kdrop {
+        min-height: 200px;
+      }
+      
+      .kcard {
+        margin-bottom: 12px;
+        font-size: 14px;
+      }
+      
+      .kcard:hover {
+        transform: none;
+      }
+      
+      .kcard:active {
+        transform: scale(0.98);
+      }
+
+      /* Touch-friendly elements */
+      .btn, .tab, .proj-item {
+        min-height: 44px;
+        touch-action: manipulation;
+      }
+
+      .filters {
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .select, .input {
+        min-height: 44px;
+        font-size: 16px; /* Prevents zoom on iOS */
+      }
+      
+      /* Mobile-friendly buttons */
+      .btn {
+        min-height: 44px;
+        touch-action: manipulation;
+      }
+      
+      .tabs {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        white-space: nowrap;
+      }
+      
+      .tab {
+        min-width: 120px;
+      }
     }
 
     /* ===== Global full-window loading overlay ===== */

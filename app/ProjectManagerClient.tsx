@@ -7,8 +7,21 @@ import { supabase } from '../lib/supabaseClient';
 // ------------ STATIC HTML (layout as string) ------------
 const staticHtml = `
   <div class="app">
+    <!-- Mobile Header (hidden on desktop) -->
+    <div class="mobile-header" style="display: none;">
+      <button class="mobile-menu-btn" id="mobileMenuBtn">☰</button>
+      <div class="mobile-title">
+        <img src="https://designcell.com.np/wp-content/themes/WPSTARTER/imagio_s/img/logo/logo.png" alt="DesignCell">
+        DCell PM
+      </div>
+      <div id="mobileUser" class="small muted"></div>
+    </div>
+    
+    <!-- Mobile Overlay -->
+    <div class="mobile-overlay" id="mobileOverlay"></div>
+
     <!-- Sidebar -->
-    <aside class="sidebar">
+    <aside class="sidebar" id="sidebar">
       <div class="sb-top">
         <div class="brand">
           <img src="https://designcell.com.np/wp-content/themes/WPSTARTER/imagio_s/img/logo/logo.png" alt="DesignCell">
@@ -156,31 +169,40 @@ const staticHtml = `
             <div class="spacer"></div>
           </div>
 
-          <div class="kanban">
+          <div class="kanban" id="kanbanBoard">
             <div class="kcol">
               <div class="khead">
-                <span class="kchip hi" title="High"></span>
-                <span class="kchip med" title="Medium"></span>
-                <span class="kchip low" title="Low"></span>
-                Pending
+                <div class="khead-title">
+                  <span class="kchip hi" title="High"></span>
+                  <span class="kchip med" title="Medium"></span>
+                  <span class="kchip low" title="Low"></span>
+                  Pending
+                </div>
+                <span class="kcount" id="countPending">0</span>
               </div>
               <div id="colPending" class="kdrop" data-status="Pending"></div>
             </div>
             <div class="kcol">
               <div class="khead">
-                <span class="kchip hi" title="High"></span>
-                <span class="kchip med" title="Medium"></span>
-                <span class="kchip low" title="Low"></span>
-                In Progress
+                <div class="khead-title">
+                  <span class="kchip hi" title="High"></span>
+                  <span class="kchip med" title="Medium"></span>
+                  <span class="kchip low" title="Low"></span>
+                  In Progress
+                </div>
+                <span class="kcount" id="countProgress">0</span>
               </div>
               <div id="colProgress" class="kdrop" data-status="In Progress"></div>
             </div>
             <div class="kcol">
               <div class="khead">
-                <span class="kchip hi" title="High"></span>
-                <span class="kchip med" title="Medium"></span>
-                <span class="kchip low" title="Low"></span>
-                Completed
+                <div class="khead-title">
+                  <span class="kchip hi" title="High"></span>
+                  <span class="kchip med" title="Medium"></span>
+                  <span class="kchip low" title="Low"></span>
+                  Completed
+                </div>
+                <span class="kcount" id="countDone">0</span>
               </div>
               <div id="colDone" class="kdrop" data-status="Complete"></div>
             </div>
@@ -1325,6 +1347,70 @@ export default function ProjectManagerClient() {
           ev.dataTransfer?.setData('text/plain', String(t.id));
           if (ev.dataTransfer) ev.dataTransfer.effectAllowed = 'move';
         });
+
+        // Touch support for mobile drag and drop
+        let touchStartY = 0;
+        let touchStartX = 0;
+        let isDragging = false;
+        let draggedElement: HTMLElement | null = null;
+
+        card.addEventListener('touchstart', (ev) => {
+          const touch = ev.touches[0];
+          touchStartY = touch.clientY;
+          touchStartX = touch.clientX;
+          isDragging = false;
+          draggedElement = card;
+          card.style.transition = 'none';
+        });
+
+        card.addEventListener('touchmove', (ev) => {
+          ev.preventDefault();
+          const touch = ev.touches[0];
+          const deltaY = Math.abs(touch.clientY - touchStartY);
+          const deltaX = Math.abs(touch.clientX - touchStartX);
+          
+          if ((deltaY > 10 || deltaX > 10) && !isDragging) {
+            isDragging = true;
+            card.classList.add('dragging');
+            card.style.position = 'fixed';
+            card.style.zIndex = '1000';
+            card.style.width = '280px';
+            card.style.pointerEvents = 'none';
+          }
+          
+          if (isDragging) {
+            card.style.left = (touch.clientX - 140) + 'px';
+            card.style.top = (touch.clientY - 30) + 'px';
+          }
+        });
+
+        card.addEventListener('touchend', (ev) => {
+          if (!isDragging) return;
+          
+          const touch = ev.changedTouches[0];
+          const elementBelow = document.elementFromPoint(touch.clientX, touch.clientY);
+          const dropZone = elementBelow?.closest('.kdrop');
+          
+          // Reset card styles
+          card.classList.remove('dragging');
+          card.style.position = '';
+          card.style.zIndex = '';
+          card.style.width = '';
+          card.style.left = '';
+          card.style.top = '';
+          card.style.pointerEvents = '';
+          card.style.transition = '';
+          
+          if (dropZone && dropZone.dataset.status) {
+            const newStatus = dropZone.dataset.status;
+            if (newStatus !== status) {
+              changeTaskStatusFromKanban(String(t.id), newStatus);
+            }
+          }
+          
+          isDragging = false;
+          draggedElement = null;
+        });
       });
 
       const zones = container.querySelectorAll<HTMLElement>('.kdrop');
@@ -1351,9 +1437,80 @@ export default function ProjectManagerClient() {
           await changeTaskStatusFromKanban(taskId, newStatus);
         });
       });
+
+      updateKanbanCounts();
     }
 
-    // ---------- LOGIN / LOGOUT ----------
+    // ---------- MOBILE MENU HANDLING ----------
+    const mobileMenuBtn = el('mobileMenuBtn');
+    const mobileOverlay = el('mobileOverlay');
+    const sidebar = el('sidebar');
+    const mobileUser = el('mobileUser');
+    const mobileHeader = container.querySelector('.mobile-header');
+
+    // Show mobile header on mobile screens
+    const updateMobileUI = () => {
+      if (window.innerWidth <= 980) {
+        if (mobileHeader) mobileHeader.style.display = 'flex';
+        if (mobileUser && currentUser) {
+          mobileUser.textContent = currentUser.name || '';
+        }
+      } else {
+        if (mobileHeader) mobileHeader.style.display = 'none';
+        closeMobileMenu();
+      }
+    };
+
+    const openMobileMenu = () => {
+      if (sidebar) sidebar.classList.add('mobile-open');
+      if (mobileOverlay) mobileOverlay.classList.add('active');
+      document.body.style.overflow = 'hidden';
+    };
+
+    const closeMobileMenu = () => {
+      if (sidebar) sidebar.classList.remove('mobile-open');
+      if (mobileOverlay) mobileOverlay.classList.remove('active');
+      document.body.style.overflow = '';
+    };
+
+    mobileMenuBtn && mobileMenuBtn.addEventListener('click', openMobileMenu);
+    mobileOverlay && mobileOverlay.addEventListener('click', closeMobileMenu);
+    
+    // Close mobile menu when clicking on sidebar links
+    const sidebarLinks = container.querySelectorAll('.proj-item, .btn');
+    sidebarLinks.forEach(link => {
+      link.addEventListener('click', () => {
+        if (window.innerWidth <= 980) {
+          setTimeout(closeMobileMenu, 100); // Delay to allow click to register
+        }
+      });
+    });
+
+    // Handle window resize
+    window.addEventListener('resize', updateMobileUI);
+    updateMobileUI(); // Initial call
+
+    // ---------- KANBAN IMPROVEMENTS ---------- 
+    const updateKanbanCounts = () => {
+      const countPending = el('countPending');
+      const countProgress = el('countProgress'); 
+      const countDone = el('countDone');
+      
+      if (countPending) {
+        const pendingCards = container.querySelectorAll('#colPending .kcard').length;
+        countPending.textContent = pendingCards.toString();
+      }
+      if (countProgress) {
+        const progressCards = container.querySelectorAll('#colProgress .kcard').length;
+        countProgress.textContent = progressCards.toString();
+      }
+      if (countDone) {
+        const doneCards = container.querySelectorAll('#colDone .kcard').length;
+        countDone.textContent = doneCards.toString();
+      }
+    };
+
+    // ---------- LOGIN/LOGOUT EVENT HANDLERS ----------
     const btnLogin = el('btnLogin');
     const btnLogout = el('btnLogout');
     const loginModal = el('loginModal');
@@ -1381,9 +1538,14 @@ export default function ProjectManagerClient() {
         projectLayoutEditTargetId = null;
 
         if (who) who.textContent = '';
+        if (mobileUser) mobileUser.textContent = '';
         if (contextInfo) contextInfo.textContent = 'All Projects';
         if (btnLogin) btnLogin.style.display = '';
         if (btnLogout) btnLogout.style.display = 'none';
+        
+        // Close mobile menu if open
+        closeMobileMenu();
+        
         buildProjectSidebar();
         refreshAssigneeFilters();
         renderTasks();
