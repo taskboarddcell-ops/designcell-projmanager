@@ -20,9 +20,22 @@ export const metadata = {
         url: "https://designcell.com.np/wp-content/themes/WPSTARTER/imagio_s/img/logo/logo.png",
         sizes: "any",
       },
+      {
+        url: "/favicon.ico",
+        sizes: "any",
+      },
     ],
-    shortcut: "https://designcell.com.np/wp-content/themes/WPSTARTER/imagio_s/img/logo/logo.png",
-    apple: "https://designcell.com.np/wp-content/themes/WPSTARTER/imagio_s/img/logo/logo.png",
+    shortcut: "/favicon.ico",
+    apple: [
+      {
+        url: "https://designcell.com.np/wp-content/themes/WPSTARTER/imagio_s/img/logo/logo.png",
+        sizes: "180x180",
+      },
+      {
+        url: "/apple-touch-icon.png",
+        sizes: "180x180",
+      },
+    ],
   },
 };
 
