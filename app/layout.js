@@ -14,6 +14,16 @@ const geistMono = Geist_Mono({
 export const metadata = {
   title: "DCell Project Manager",
   description: "Project management system for DCell",
+  icons: {
+    icon: [
+      {
+        url: "https://designcell.com.np/wp-content/themes/WPSTARTER/imagio_s/img/logo/logo.png",
+        sizes: "any",
+      },
+    ],
+    shortcut: "https://designcell.com.np/wp-content/themes/WPSTARTER/imagio_s/img/logo/logo.png",
+    apple: "https://designcell.com.np/wp-content/themes/WPSTARTER/imagio_s/img/logo/logo.png",
+  },
 };
 
 export default function RootLayout({ children }) {
