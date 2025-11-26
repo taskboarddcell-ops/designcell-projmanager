@@ -318,7 +318,7 @@
 
     @media (max-width: 980px){
       .app{ 
-        grid-template-columns: 1fr; 
+        grid-template-columns: 1fr !important;
         grid-template-rows: auto 1fr;
         position: relative;
       }
