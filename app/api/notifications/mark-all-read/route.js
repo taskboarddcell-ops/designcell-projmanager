@@ -1,14 +1,16 @@
 // app/api/notifications/mark-all-read/route.js
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+function getSupabaseClient() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-if (!supabaseUrl || !supabaseServiceKey) {
-  throw new Error('Missing Supabase env vars');
+  if (!supabaseUrl || !supabaseServiceKey) {
+    throw new Error('Missing Supabase env vars');
+  }
+
+  return createClient(supabaseUrl, supabaseServiceKey);
 }
-
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 /**
  * POST /api/notifications/mark-all-read
@@ -17,6 +19,7 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
  */
 export async function POST(request) {
   try {
+    const supabase = getSupabaseClient();
     const body = await request.json().catch(() => ({}));
     const { userId } = body;
 
