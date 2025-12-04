@@ -698,6 +698,45 @@ export default function ProjectManagerClient() {
       }, ms);
     };
 
+    // ---------- MODAL HELPERS ----------
+    const showModal = (modal: HTMLElement | null) => {
+      if (modal) {
+        modal.classList.add('show');
+        modal.style.display = 'flex';
+      }
+    };
+
+    const hideModal = (modal: HTMLElement | null) => {
+      if (modal) {
+        modal.classList.remove('show');
+        modal.style.display = 'none';
+      }
+    };
+
+    // ---------- ROLE HELPERS ----------
+    const isAdmin = () => {
+      return currentUser?.access_level === 'Admin';
+    };
+
+    const isAssignee = (taskAssignees: string[]) => {
+      return currentUser && taskAssignees.includes(currentUser.staff_id);
+    };
+
+    const userCanSeeTask = (task: any) => {
+      if (!currentUser) return false;
+      if (isAdmin()) return true;
+      if (isAssignee(task.assignee_ids || [])) return true;
+      if (task.created_by_id === currentUser.staff_id) return true;
+      return false;
+    };
+
+    const isProjectLeadFor = (projectId: string) => {
+      if (!currentUser || !isAdmin()) return false;
+      const proj = projects.find((p) => p.id === projectId);
+      if (!proj) return false;
+      return (proj.lead_ids || []).includes(currentUser.staff_id);
+    };
+
     // Handle task assignment notifications
     async function handleTaskAssignmentChange(oldTask, newTask) {
       if (!newTask || !newTask.assignee_ids || newTask.assignee_ids.length === 0) {
