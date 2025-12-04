@@ -104,6 +104,26 @@ const staticHtml = `
         </div>
 
         <div class="topbar-right" style="display:flex;align-items:center;gap:8px;">
+          <!-- Notification Bell -->
+          <div id="notificationBell" style="position:relative;cursor:pointer;">
+            <button id="btnNotificationBell" class="btn" style="position:relative;padding:6px;background:transparent;border:none;" title="Notifications">
+              <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#172554">
+                <path d="M160-200v-60h60v-246q0-83 50-145.5T420-792v-28q0-25 17.5-42.5T480-880q25 0 42.5 17.5T540-820v28q80 17 130 79.5T720-506v246h60v60H160Zm320-300Zm0 420q-33 0-56.5-23.5T400-160h160q0 33-23.5 56.5T480-80Z"/>
+              </svg>
+              <span id="notificationBadge" class="notification-badge" style="display:none;position:absolute;top:-4px;right:-4px;background:#dc2626;color:white;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:bold;">0</span>
+            </button>
+            <!-- Notification Dropdown -->
+            <div id="notificationDropdown" class="notification-dropdown" style="display:none;position:absolute;top:40px;right:0;background:white;border:1px solid #e5e7eb;border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,0.1);min-width:320px;max-width:400px;max-height:480px;overflow-y:auto;z-index:50;">
+              <div style="padding:12px;border-bottom:1px solid #e5e7eb;display:flex;justify-content:space-between;align-items:center;">
+                <div class="small" style="font-weight:600;">Notifications</div>
+                <button id="markAllReadBtn" class="btn-sm" style="background:transparent;border:none;color:#172554;font-size:12px;cursor:pointer;">Mark all as read</button>
+              </div>
+              <div id="notificationList" style="padding:0;">
+                <div class="small muted" style="padding:16px;text-align:center;">Loading...</div>
+              </div>
+            </div>
+          </div>
+
           <div id="contextInfo" class="small muted">All Projects</div>
           <select
             id="projectStatusControl"
@@ -678,75 +698,53 @@ export default function ProjectManagerClient() {
       }, ms);
     };
 
-    const showModal = (m: HTMLElement | null) => {
-      if (m) m.classList.add('show');
-    };
-
-    const hideModal = (m: HTMLElement | null) => {
-      if (m) m.classList.remove('show');
-    };
-
-    // ---- ROLE / PERMISSION HELPERS ----
-    const isAdmin = () =>
-      currentUser &&
-      (currentUser.access_level === 'Admin' ||
-        currentUser.access_level === 'Owner');
-
-    function isTeamLead() {
-      return currentUser && currentUser.access_level === 'Team Leader';
-    }
-
-    function isDesigner() {
-      return currentUser && currentUser.access_level === 'Designer';
-    }
-
-    function isProjectLeadFor(project: any, user: any = currentUser) {
-      if (!project || !user) return false;
-      const leads = project.lead_ids || [];
-      return leads.includes(user.staff_id);
-    }
-
-    function isAssignee(task: any) {
-      if (!currentUser) return false;
-      const ids = task.assignee_ids;
-      if (Array.isArray(ids)) {
-        return ids.includes(currentUser.staff_id);
-      }
-      return false;
-    }
-
-    function userCanSeeTask(task: any) {
-      if (!currentUser) return false;
-      // Admin sees everything
-      if (isAdmin()) return true;
-
-      const proj = projects.find((p) => p.id === task.project_id);
-      const isLeadForProject =
-        proj && (proj.lead_ids || []).includes(currentUser.staff_id);
-
-      // Project lead: all tasks in their project
-      if (isLeadForProject) return true;
-
-      // Everyone else: only tasks assigned to them
-      return isAssignee(task);
-    }
-
-    async function loadProjectUsers(projectId: string) {
-      if (projectUsersCache[projectId]) return;
-
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .order('name', { ascending: true });
-
-      if (error) {
-        console.error('Load project users failed', error);
-        toast('Could not load users');
-        projectUsersCache[projectId] = [];
+    // Handle task assignment notifications
+    async function handleTaskAssignmentChange(oldTask, newTask) {
+      if (!newTask || !newTask.assignee_ids || newTask.assignee_ids.length === 0) {
         return;
       }
 
-      projectUsersCache[projectId] = data || [];
+      // Skip if task is completed
+      if (newTask.status === 'Complete' || newTask.status === 'Completed') {
+        return;
+      }
+
+      const oldAssignees = oldTask?.assignee_ids || [];
+      const newAssignees = newTask.assignee_ids || [];
+
+      // Find newly assigned users
+      const newlyAssigned = newAssignees.filter(
+        (id) => !oldAssignees.includes(id)
+      );
+
+      if (newlyAssigned.length === 0) {
+        return;
+      }
+
+      try {
+        // Create notifications for newly assigned users
+        const notifications = newlyAssigned.map((staffId) => {
+          const dueStr = newTask.due 
+            ? new Date(newTask.due).toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+              })
+            : 'No due date';
+
+          return {
+            user_id: staffId,
+            type: 'TASK_ASSIGNED',
+            title: `New task assigned: ${newTask.task || 'Untitled'}`,
+            body: `You have been assigned a new task in project "${newTask.project_name || 'Unknown'}".\n\nDue date: ${dueStr}`,
+            link_url: `/tasks/${newTask.id}`,
+          };
+        });
+
+        await supabase.from('notifications').insert(notifications);
+      } catch (error) {
+        console.error('Create task assignment notification error:', error);
+      }
     }
 
     const canEditProjectLayout = (proj: any) => {
@@ -1509,6 +1507,171 @@ export default function ProjectManagerClient() {
         countDone.textContent = doneCards.toString();
       }
     };
+
+    // ---------- NOTIFICATION BELL HANDLING ----------
+    const btnNotificationBell = el('btnNotificationBell');
+    const notificationBadge = el('notificationBadge');
+    const notificationDropdown = el('notificationDropdown');
+    const notificationList = el('notificationList');
+    const markAllReadBtn = el('markAllReadBtn');
+
+    let notificationsPollInterval = null;
+
+    async function loadNotifications() {
+      if (!currentUser) return;
+
+      try {
+        const response = await fetch(
+          `/api/notifications?userId=${encodeURIComponent(currentUser.staff_id)}&limit=20`,
+        );
+        if (!response.ok) {
+          console.error('Failed to load notifications');
+          return;
+        }
+
+        const data = await response.json();
+        const { notifications, unread_count } = data;
+
+        // Update badge
+        if (notificationBadge) {
+          if (unread_count > 0) {
+            notificationBadge.textContent = unread_count;
+            notificationBadge.style.display = 'flex';
+          } else {
+            notificationBadge.style.display = 'none';
+          }
+        }
+
+        // Render notification list
+        if (notificationList) {
+          if (notifications.length === 0) {
+            notificationList.innerHTML = '<div class="small muted" style="padding:16px;text-align:center;">No notifications</div>';
+          } else {
+            notificationList.innerHTML = notifications
+              .map((notif) => {
+                const createdAt = new Date(notif.created_at);
+                const timeStr = getRelativeTime(createdAt);
+                const isUnread = !notif.is_read;
+
+                return `
+                <div class="notification-item ${isUnread ? 'unread' : ''}" data-id="${notif.id}" data-link="${notif.link_url || ''}">
+                  <div class="notification-item-title">${esc(notif.title)}</div>
+                  ${notif.body ? `<div class="notification-item-body">${esc(notif.body)}</div>` : ''}
+                  <div class="notification-item-time">${timeStr}</div>
+                </div>
+              `;
+              })
+              .join('');
+
+            // Add click handlers
+            notificationList.querySelectorAll('.notification-item').forEach((item) => {
+              item.addEventListener('click', async () => {
+                const notifId = item.getAttribute('data-id');
+                const link = item.getAttribute('data-link');
+
+                if (notifId) {
+                  try {
+                    await fetch(`/api/notifications/${notifId}/read`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ userId: currentUser.staff_id }),
+                    });
+                  } catch (error) {
+                    console.error('Failed to mark notification as read:', error);
+                  }
+                }
+
+                if (link) {
+                  // Navigate to the link
+                  window.location.href = link;
+                }
+
+                await loadNotifications();
+              });
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Load notifications error:', error);
+      }
+    }
+
+    // Helper to format relative time
+    function getRelativeTime(date) {
+      const now = new Date();
+      const diff = now.getTime() - date.getTime();
+      const minutes = Math.floor(diff / 60000);
+      const hours = Math.floor(diff / 3600000);
+      const days = Math.floor(diff / 86400000);
+
+      if (minutes < 1) return 'Just now';
+      if (minutes < 60) return `${minutes}m ago`;
+      if (hours < 24) return `${hours}h ago`;
+      if (days < 7) return `${days}d ago`;
+
+      return date.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+      });
+    }
+
+    // Toggle notification dropdown
+    btnNotificationBell &&
+      btnNotificationBell.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (notificationDropdown) {
+          const isHidden = notificationDropdown.style.display === 'none';
+          notificationDropdown.style.display = isHidden ? 'block' : 'none';
+
+          if (isHidden) {
+            await loadNotifications();
+
+            // Poll for new notifications while dropdown is open
+            if (notificationsPollInterval) {
+              clearInterval(notificationsPollInterval);
+            }
+            notificationsPollInterval = setInterval(loadNotifications, 30000); // Poll every 30s
+          } else {
+            if (notificationsPollInterval) {
+              clearInterval(notificationsPollInterval);
+              notificationsPollInterval = null;
+            }
+          }
+        }
+      });
+
+    // Mark all as read
+    markAllReadBtn &&
+      markAllReadBtn.addEventListener('click', async () => {
+        if (!currentUser) return;
+
+        try {
+          await fetch('/api/notifications/mark-all-read', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: currentUser.staff_id }),
+          });
+
+          await loadNotifications();
+        } catch (error) {
+          console.error('Mark all as read error:', error);
+        }
+      });
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+      if (
+        notificationDropdown &&
+        !notificationDropdown.contains(e.target as Node) &&
+        e.target !== btnNotificationBell
+      ) {
+        notificationDropdown.style.display = 'none';
+        if (notificationsPollInterval) {
+          clearInterval(notificationsPollInterval);
+          notificationsPollInterval = null;
+        }
+      }
+    });
 
     // ---------- LOGIN/LOGOUT EVENT HANDLERS ----------
     const btnLogin = el('btnLogin');
@@ -2502,22 +2665,34 @@ export default function ProjectManagerClient() {
             return;
           }
 
+          // Handle task assignment notifications
+          const oldAssignees = editingTask.assignee_ids || [];
+          const newAssignees = payload.assignee_ids || [];
+          if (JSON.stringify(oldAssignees) !== JSON.stringify(newAssignees)) {
+            await handleTaskAssignmentChange(editingTask, payload);
+          }
+
           hideModal(taskModal);
           editingTask = null;
           toast('Task updated');
         } else {
-          const { error } = await supabase.from('tasks').insert([
+          const { data: inserted, error } = await supabase.from('tasks').insert([
             {
               ...payload,
               created_by_id: currentUser ? currentUser.staff_id : null,
               created_by_name: currentUser ? currentUser.name : null,
             },
-          ]);
+          ]).select().single();
 
           if (error) {
             console.error('Create task error', error);
             toast('Failed to create task');
             return;
+          }
+
+          // Handle task assignment notifications for new task
+          if (inserted && (payload.assignee_ids || []).length > 0) {
+            await handleTaskAssignmentChange(null, inserted);
           }
 
           hideModal(taskModal);
