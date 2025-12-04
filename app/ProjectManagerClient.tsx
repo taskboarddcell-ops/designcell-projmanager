@@ -105,7 +105,7 @@ const staticHtml = `
 
         <div class="topbar-right" style="display:flex;align-items:center;gap:8px;">
           <!-- Notification Bell -->
-          <div id="notificationBell" style="position:relative;cursor:pointer;">
+          <div id="notificationBell" style="position:relative;cursor:pointer;display:none;">
             <button id="btnNotificationBell" class="btn" style="position:relative;padding:6px;background:transparent;border:none;" title="Notifications">
               <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#172554">
                 <path d="M160-200v-60h60v-246q0-83 50-145.5T420-792v-28q0-25 17.5-42.5T480-880q25 0 42.5 17.5T540-820v28q80 17 130 79.5T720-506v246h60v60H160Zm320-300Zm0 420q-33 0-56.5-23.5T400-160h160q0 33-23.5 56.5T480-80Z"/>
@@ -1705,6 +1705,8 @@ export default function ProjectManagerClient() {
         if (contextInfo) contextInfo.textContent = 'All Projects';
         if (btnLogin) btnLogin.style.display = '';
         if (btnLogout) btnLogout.style.display = 'none';
+        const notificationBell = el('notificationBell');
+        if (notificationBell) notificationBell.style.display = 'none';
         
         // Close mobile menu if open
         closeMobileMenu();
@@ -1751,10 +1753,13 @@ export default function ProjectManagerClient() {
         if (who) who.textContent = `${user.name} [${user.access_level || 'User'}]`;
         if (btnLogin) btnLogin.style.display = 'none';
         if (btnLogout) btnLogout.style.display = '';
+        const notificationBell = el('notificationBell');
+        if (notificationBell) notificationBell.style.display = '';
         refreshRoleUI();
 
         hideModal(loginModal);
         await loadDataAfterLogin();
+        await loadNotifications();
       });
 
     // ---------- LOAD DATA AFTER LOGIN ----------
