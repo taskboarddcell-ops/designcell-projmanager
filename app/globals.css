@@ -1078,46 +1078,48 @@ tr.low {
   background: #94a3b8;
 }
 
-/* Editor Styles */
+/* Editor Styles - Improved UI/UX */
 .editor-stage-card {
-  background: #fff;
-  border: 1px solid var(--line-hair);
-  border-radius: 6px;
-  margin-bottom: 12px;
+  background: #ffffff;
+  border: 2px solid #e2e8f0;
+  border-radius: 8px;
+  margin-bottom: 16px;
   overflow: hidden;
-  transition: box-shadow 0.2s;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s;
 }
 
 .editor-stage-card:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-  border-color: var(--line-mid);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  border-color: #cbd5e1;
 }
 
 .editor-stage-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  background: #f8fafc;
-  border-bottom: 1px solid var(--line-hair);
+  gap: 10px;
+  padding: 12px 16px;
+  background: linear-gradient(to bottom, #f8fafc, #f1f5f9);
+  border-bottom: 2px solid #e2e8f0;
 }
 
 .editor-toggle-btn {
   background: none;
   border: none;
   cursor: pointer;
-  padding: 4px;
+  padding: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--muted);
-  transition: transform 0.2s;
-  border-radius: 4px;
+  color: #64748b;
+  transition: all 0.2s;
+  border-radius: 6px;
+  flex-shrink: 0;
 }
 
 .editor-toggle-btn:hover {
   background: #e2e8f0;
-  color: var(--ink);
+  color: #1e293b;
 }
 
 .editor-toggle-btn.collapsed {
@@ -1127,31 +1129,38 @@ tr.low {
 .editor-stage-name {
   flex: 1;
   font-weight: 700;
-  font-size: 14px;
-  border: 1px solid transparent;
+  font-size: 15px;
+  border: 2px solid transparent;
   background: transparent;
-  padding: 6px 8px;
-  border-radius: 4px;
-  color: var(--ink);
+  padding: 8px 12px;
+  border-radius: 6px;
+  color: #1e293b;
+  transition: all 0.2s;
+}
+
+.editor-stage-name:hover {
+  background: rgba(255, 255, 255, 0.5);
 }
 
 .editor-stage-name:focus {
   background: #fff;
-  border-color: var(--accent);
+  border-color: #3b82f6;
   outline: none;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
 .editor-stage-name::placeholder {
-  font-weight: 400;
-  color: var(--muted);
+  font-weight: 500;
+  color: #94a3b8;
 }
 
 .editor-sub-list {
-  padding: 12px;
-  background: #fff;
+  padding: 16px;
+  background: #fafbfc;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
+  border-top: 1px solid #e2e8f0;
 }
 
 .editor-sub-list.hidden {
@@ -1161,64 +1170,108 @@ tr.low {
 .editor-sub-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding-left: 36px;
-  /* Indent */
+  gap: 10px;
+  padding: 8px 12px;
+  padding-left: 48px;
+  /* Increased indent for better hierarchy */
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+.editor-sub-row:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
 .editor-sub-name {
   flex: 1;
-  font-size: 13px;
-  padding: 6px 10px;
-  border: 1px solid var(--line-hair);
-  border-radius: 4px;
+  font-size: 14px;
+  padding: 8px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
   background: #fff;
-  transition: border-color 0.2s;
+  transition: all 0.2s;
+  color: #475569;
+}
+
+.editor-sub-name:hover {
+  border-color: #cbd5e1;
 }
 
 .editor-sub-name:focus {
-  border-color: var(--accent);
+  border-color: #3b82f6;
   outline: none;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.editor-sub-name::placeholder {
+  color: #94a3b8;
 }
 
 .editor-actions {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 
 .btn-icon {
   background: none;
   border: none;
   cursor: pointer;
-  padding: 6px;
-  border-radius: 4px;
+  padding: 8px;
+  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--muted);
+  color: #64748b;
   transition: all 0.2s;
 }
 
 .btn-icon:hover {
   background: #fee2e2;
   color: #ef4444;
+  transform: scale(1.1);
 }
 
 .btn-sm {
-  font-size: 12px;
-  padding: 4px 8px;
-  border-radius: 4px;
-  border: 1px solid var(--line-hair);
+  font-size: 13px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid #cbd5e1;
   background: #fff;
   cursor: pointer;
   font-weight: 600;
-  color: var(--ink);
+  color: #475569;
+  transition: all 0.2s;
+  white-space: nowrap;
 }
 
 .btn-sm:hover {
   background: #f1f5f9;
-  border-color: #cbd5e1;
+  border-color: #94a3b8;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.btn-sm:active {
+  transform: translateY(0);
+}
+
+/* Sub-add button with better visibility */
+.sub-add {
+  background: linear-gradient(to bottom, #fff, #f8fafc) !important;
+  border: 2px dashed #cbd5e1 !important;
+  color: #64748b !important;
+  margin-left: 48px !important;
+  margin-top: 4px;
+}
+
+.sub-add:hover {
+  background: linear-gradient(to bottom, #f8fafc, #f1f5f9) !important;
+  border-color: #94a3b8 !important;
+  color: #1e293b !important;
 }
 
 /* ===== Notifications ===== */
