@@ -3582,8 +3582,15 @@ export default function ProjectManagerClient() {
     stOK &&
       stOK.addEventListener('click', async () => {
         if (!selectedTask || !stSel) return;
-        if (!isAssignee(selectedTask)) {
-          toast('Only assignees can update status');
+
+        let canUpdate = false;
+        if (isAdmin()) canUpdate = true;
+        else if (selectedTask.created_by_id === currentUser?.staff_id) canUpdate = true;
+        else if (isAssignee(selectedTask.assignee_ids || [])) canUpdate = true;
+        else if (selectedTask.project_id && isProjectLeadFor(selectedTask.project_id)) canUpdate = true;
+
+        if (!canUpdate) {
+          toast('Only assignees, leads, or admins can update status');
           return;
         }
 
