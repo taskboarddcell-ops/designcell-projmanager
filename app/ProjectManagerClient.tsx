@@ -48,6 +48,13 @@ const staticHtml = `
       </div>
 
       <div class="sb-new">
+        <div id="userManagementEntry" class="proj-item" style="display:none">
+          <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#172554">
+            <path d="M38-158v-94q0-35 18-63.5t50-42.5q73-32 131.5-46T358-418q62 0 120 14t131 46q32 14 50.5 42.5T678-252v94H38Zm700 0v-94q0-63-32-103.5T622-423q69 8 130 23.5t99 35.5q33 19 52 47t19 63v96H738ZM358-478q-66 0-108-42t-42-108q0-66 42-108t108-42q66 0 108 42t42 108q0 66-42 108t-108 42Zm360-150q0 66-42 108t-108 42q-11 0-24.5-1.5T519-484q24-25 36.5-61.5T568-628q0-45-12.5-79.5T519-774q11-3 24.5-5t24.5-2q66 0 108 42t42 108Z"/>
+          </svg>
+          User Management
+        </div>
+        
         <div id="reportsEntry" class="proj-item" style="display:none">
           <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#172554">
             <path d="M280-280h80v-200h-80v200Zm320 0h80v-400h-80v400Zm-160 0h80v-120h-80v120Zm0-200h80v-80h-80v80ZM200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h560q33 0 56.5 23.5T840-760v560q0 33-23.5 56.5T760-120H200Zm0-80h560v-560H200v560Zm0-560v560-560Z"/>
@@ -150,6 +157,12 @@ const staticHtml = `
               <option value="Completed">Completed</option>
               <option value="All">All</option>
             </select>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <label class="small muted" style="white-space:nowrap;">Due Date:</label>
+              <input id="filterDateFrom" class="input" type="date" placeholder="From" style="min-width:140px;">
+              <span class="small muted">to</span>
+              <input id="filterDateTo" class="input" type="date" placeholder="To" style="min-width:140px;">
+            </div>
             <div class="spacer"></div>
             <div id="projectContext" class="small muted"></div>
           </div>
@@ -186,6 +199,12 @@ const staticHtml = `
               <option value="Completed">Completed</option>
               <option value="All">All</option>
             </select>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <label class="small muted" style="white-space:nowrap;">Due Date:</label>
+              <input id="kbFilterDateFrom" class="input" type="date" placeholder="From" style="min-width:140px;">
+              <span class="small muted">to</span>
+              <input id="kbFilterDateTo" class="input" type="date" placeholder="To" style="min-width:140px;">
+            </div>
             <div class="spacer"></div>
           </div>
 
@@ -235,6 +254,7 @@ const staticHtml = `
             <button id="btnEditLayout" class="btn">✎ Edit Layout</button>
             <button id="btnBulkAssign" class="btn" style="display:none">+ Bulk Tasks</button>
           </div>
+          <div id="projectInfoCard" style="display:none;margin-bottom:16px;"></div>
           <div id="stagesBox"></div>
         </section>
       </div>
@@ -508,6 +528,74 @@ const staticHtml = `
     </div>
   </div>
 
+  <!-- EDIT PROJECT NAME MODAL -->
+  <div id="editProjectNameModal" class="modal">
+    <div class="mc" style="max-width:400px">
+      <h3 style="margin:0 0 12px 0">Edit Project Name</h3>
+      
+      <div style="margin-bottom:12px">
+        <label class="small muted">Project Name *</label>
+        <input id="editProjectNameInput" class="input" type="text" placeholder="Enter project name">
+      </div>
+
+      <div class="right" style="margin-top:12px">
+        <button id="editProjectNameCancel" class="btn">Cancel</button>
+        <button id="editProjectNameSave" class="btn btn-primary">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- USER MANAGEMENT MODAL -->
+  <div id="userManagementModal" class="modal">
+    <div class="mc" style="max-width:800px">
+      <h3 style="margin:0 0 12px 0">User Management</h3>
+      
+      <div style="margin-bottom:12px;">
+        <input id="userSearchInput" class="input" type="text" placeholder="Search users by name or staff ID...">
+      </div>
+
+      <div style="max-height:500px;overflow:auto;border:2px solid var(--line-hair);background:#fff;">
+        <table style="width:100%;">
+          <thead>
+            <tr>
+              <th style="padding:10px;text-align:left;background:#eef2f6;border-bottom:2px solid var(--line-strong);">Name</th>
+              <th style="padding:10px;text-align:left;background:#eef2f6;border-bottom:2px solid var(--line-strong);">Staff ID</th>
+              <th style="padding:10px;text-align:left;background:#eef2f6;border-bottom:2px solid var(--line-strong);">Access Level</th>
+              <th style="padding:10px;text-align:right;background:#eef2f6;border-bottom:2px solid var(--line-strong);">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="userManagementList">
+            <tr>
+              <td colspan="4" style="padding:20px;text-align:center;" class="small muted">Loading users...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="right" style="margin-top:12px">
+        <button id="userManagementClose" class="btn">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- RESET PASSWORD MODAL -->
+  <div id="resetPasswordModal" class="modal">
+    <div class="mc" style="max-width:400px">
+      <h3 style="margin:0 0 12px 0">Reset Password</h3>
+      
+      <div style="margin-bottom:12px;">
+        <div class="small muted" style="margin-bottom:8px;">User: <strong id="resetPasswordUserName"></strong></div>
+        <label class="small muted">New 4-Digit Password *</label>
+        <input id="resetPasswordInput" class="input" type="password" maxlength="4" inputmode="numeric" placeholder="Enter 4 digits">
+      </div>
+
+      <div class="right" style="margin-top:12px">
+        <button id="resetPasswordCancel" class="btn">Cancel</button>
+        <button id="resetPasswordSave" class="btn btn-primary">Reset Password</button>
+      </div>
+    </div>
+  </div>
+
   <!-- STAGE / SUB-STAGE ASSIGN PANEL -->
   <div id="stAssignPanel" class="modal">
     <div class="mc" style="max-width:480px">
@@ -731,7 +819,7 @@ export default function ProjectManagerClient() {
     };
 
     const isProjectLeadFor = (projectId: string) => {
-      if (!currentUser || !isAdmin()) return false;
+      if (!currentUser) return false;
       const proj = projects.find((p) => p.id === projectId);
       if (!proj) return false;
       return (proj.lead_ids || []).includes(currentUser.staff_id);
@@ -763,12 +851,12 @@ export default function ProjectManagerClient() {
       try {
         // Create notifications for newly assigned users
         const notifications = newlyAssigned.map((staffId) => {
-          const dueStr = newTask.due 
+          const dueStr = newTask.due
             ? new Date(newTask.due).toLocaleDateString('en-US', {
-                year: 'numeric',
-                month: 'short',
-                day: 'numeric',
-              })
+              year: 'numeric',
+              month: 'short',
+              day: 'numeric',
+            })
             : 'No due date';
 
           return {
@@ -783,6 +871,51 @@ export default function ProjectManagerClient() {
         await supabase.from('notifications').insert(notifications);
       } catch (error) {
         console.error('Create task assignment notification error:', error);
+      }
+    }
+
+    // Handle task status change notifications (notify leads and admins)
+    async function handleTaskStatusChange(task: any, fromStatus: string, toStatus: string, changedByName: string) {
+      if (!task || !task.project_id) return;
+
+      try {
+        // Get the project to find leads
+        const project = projects.find((p) => p.id === task.project_id);
+        if (!project) return;
+
+        // Get all admin users
+        const { data: adminUsers, error: adminError } = await supabase
+          .from('users')
+          .select('staff_id')
+          .eq('access_level', 'Admin');
+
+        if (adminError) {
+          console.error('Failed to load admins for notification', adminError);
+          return;
+        }
+
+        const adminIds = (adminUsers || []).map((u) => u.staff_id);
+        const leadIds = project.lead_ids || [];
+
+        // Combine admin and lead IDs, remove duplicates, and exclude the person who made the change
+        const notifyUsers = [...new Set([...adminIds, ...leadIds])].filter(
+          (id) => id !== currentUser?.staff_id
+        );
+
+        if (notifyUsers.length === 0) return;
+
+        // Create notifications
+        const notifications = notifyUsers.map((staffId) => ({
+          user_id: staffId,
+          type: 'TASK_STATUS_UPDATE',
+          title: `Task status updated: ${task.task || 'Untitled'}`,
+          body: `${changedByName} changed task status from "${fromStatus}" to "${toStatus}" in project "${task.project_name || 'Unknown'}".`,
+          link_url: `/tasks/${task.id}`,
+        }));
+
+        await supabase.from('notifications').insert(notifications);
+      } catch (error) {
+        console.error('Create task status notification error:', error);
       }
     }
 
@@ -885,6 +1018,14 @@ export default function ProjectManagerClient() {
           changed_by_name: currentUser.name,
         },
       ]);
+
+      // Notify admins and project leads
+      await handleTaskStatusChange(
+        task,
+        prevStatus,
+        newStatus,
+        currentUser.name || currentUser.staff_id
+      );
 
       toast('Status updated');
       await loadDataAfterLogin();
@@ -1120,6 +1261,16 @@ export default function ProjectManagerClient() {
         kbFilterAssignee.value = filterAssignee.value;
       if (kbFilterStatus && filterStatus)
         kbFilterStatus.value = filterStatus.value;
+
+      const filterDateFromEl = el('filterDateFrom') as HTMLInputElement | null;
+      const filterDateToEl = el('filterDateTo') as HTMLInputElement | null;
+      const kbFilterDateFromEl = el('kbFilterDateFrom') as HTMLInputElement | null;
+      const kbFilterDateToEl = el('kbFilterDateTo') as HTMLInputElement | null;
+
+      if (kbFilterDateFromEl && filterDateFromEl)
+        kbFilterDateFromEl.value = filterDateFromEl.value;
+      if (kbFilterDateToEl && filterDateToEl)
+        kbFilterDateToEl.value = filterDateToEl.value;
     }
 
     filterAssignee &&
@@ -1136,10 +1287,265 @@ export default function ProjectManagerClient() {
         renderKanban();
       });
 
+    // Date filter event listeners
+    const filterDateFromEl = el('filterDateFrom') as HTMLInputElement | null;
+    const filterDateToEl = el('filterDateTo') as HTMLInputElement | null;
+
+    filterDateFromEl &&
+      filterDateFromEl.addEventListener('change', () => {
+        renderTasks();
+        syncKanbanFiltersFromList();
+        renderKanban();
+      });
+
+    filterDateToEl &&
+      filterDateToEl.addEventListener('change', () => {
+        renderTasks();
+        syncKanbanFiltersFromList();
+        renderKanban();
+      });
+
     kbFilterAssignee &&
       kbFilterAssignee.addEventListener('change', () => renderKanban());
     kbFilterStatus &&
       kbFilterStatus.addEventListener('change', () => renderKanban());
+
+    // Kanban date filter event listeners
+    const kbFilterDateFromEl = el('kbFilterDateFrom') as HTMLInputElement | null;
+    const kbFilterDateToEl = el('kbFilterDateTo') as HTMLInputElement | null;
+
+    kbFilterDateFromEl &&
+      kbFilterDateFromEl.addEventListener('change', () => renderKanban());
+    kbFilterDateToEl &&
+      kbFilterDateToEl.addEventListener('change', () => renderKanban());
+
+    // ---------- USER MANAGEMENT ----------
+    const userManagementEntry = el('userManagementEntry');
+    const userManagementModal = el('userManagementModal');
+    const userManagementList = el('userManagementList');
+    const userSearchInput = el('userSearchInput') as HTMLInputElement | null;
+    const userManagementClose = el('userManagementClose');
+
+    const resetPasswordModal = el('resetPasswordModal');
+    const resetPasswordUserName = el('resetPasswordUserName');
+    const resetPasswordInput = el('resetPasswordInput') as HTMLInputElement | null;
+    const resetPasswordCancel = el('resetPasswordCancel');
+    const resetPasswordSave = el('resetPasswordSave');
+
+    let currentResetUserId: string | null = null;
+    let allUsers: any[] = [];
+
+    async function openUserManagement() {
+      if (!isAdmin()) {
+        toast('Only admins can manage users');
+        return;
+      }
+
+      await loadAllUsers();
+      showModal(userManagementModal);
+    }
+
+    async function loadAllUsers() {
+      try {
+        const { data: users, error } = await supabase
+          .from('users')
+          .select('*')
+          .order('name', { ascending: true });
+
+        if (error) {
+          console.error('Failed to load users', error);
+          toast('Failed to load users');
+          return;
+        }
+
+        allUsers = users || [];
+        renderUserList(allUsers);
+      } catch (err) {
+        console.error('Exception loading users', err);
+        toast('Failed to load users');
+      }
+    }
+
+    function renderUserList(users: any[]) {
+      if (!userManagementList) return;
+
+      if (users.length === 0) {
+        userManagementList.innerHTML = `
+          <tr>
+            <td colspan="4" style="padding:20px;text-align:center;" class="small muted">No users found</td>
+          </tr>
+        `;
+        return;
+      }
+
+      userManagementList.innerHTML = users.map((user) => {
+        const isCurrentUser = currentUser && currentUser.staff_id === user.staff_id;
+
+        return `
+          <tr style="border-bottom:1px solid #e5e7eb;">
+            <td style="padding:12px 10px;">${esc(user.name || 'N/A')}</td>
+            <td style="padding:12px 10px;">${esc(user.staff_id)}</td>
+            <td style="padding:12px 10px;">${esc(user.access_level || 'User')}</td>
+            <td style="padding:12px 10px;text-align:right;">
+              <button 
+                class="btn-sm user-reset-password" 
+                data-user-id="${esc(user.staff_id)}"
+                data-user-name="${esc(user.name || user.staff_id)}"
+                style="margin-left:4px;"
+              >
+                Reset Password
+              </button>
+              ${!isCurrentUser ? `
+                <button 
+                  class="btn-sm btn-danger user-delete" 
+                  data-user-id="${esc(user.staff_id)}"
+                  data-user-name="${esc(user.name || user.staff_id)}"
+                  style="margin-left:4px;"
+                >
+                  Delete
+                </button>
+              ` : '<span class="small muted" style="margin-left:8px;">(Current User)</span>'}
+            </td>
+          </tr>
+        `;
+      }).join('');
+
+      // Attach event listeners
+      userManagementList.querySelectorAll<HTMLElement>('.user-reset-password').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const userId = btn.getAttribute('data-user-id');
+          const userName = btn.getAttribute('data-user-name');
+          if (userId && userName) {
+            openResetPasswordModal(userId, userName);
+          }
+        });
+      });
+
+      userManagementList.querySelectorAll<HTMLElement>('.user-delete').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const userId = btn.getAttribute('data-user-id');
+          const userName = btn.getAttribute('data-user-name');
+          if (userId && userName) {
+            await deleteUser(userId, userName);
+          }
+        });
+      });
+    }
+
+    function openResetPasswordModal(userId: string, userName: string) {
+      currentResetUserId = userId;
+      if (resetPasswordUserName) {
+        resetPasswordUserName.textContent = userName;
+      }
+      if (resetPasswordInput) {
+        resetPasswordInput.value = '';
+      }
+      showModal(resetPasswordModal);
+    }
+
+    async function deleteUser(userId: string, userName: string) {
+      if (!isAdmin()) {
+        toast('Only admins can delete users');
+        return;
+      }
+
+      const confirmed = confirm(`Are you sure you want to delete user "${userName}" (${userId})?\n\nThis action cannot be undone.`);
+      if (!confirmed) return;
+
+      try {
+        const { error } = await supabase
+          .from('users')
+          .delete()
+          .eq('staff_id', userId);
+
+        if (error) {
+          console.error('Failed to delete user', error);
+          toast('Failed to delete user');
+          return;
+        }
+
+        toast('User deleted successfully');
+        await loadAllUsers();
+      } catch (err) {
+        console.error('Exception deleting user', err);
+        toast('Failed to delete user');
+      }
+    }
+
+    userManagementEntry &&
+      userManagementEntry.addEventListener('click', openUserManagement);
+
+    userManagementClose &&
+      userManagementClose.addEventListener('click', () => {
+        hideModal(userManagementModal);
+      });
+
+    userSearchInput &&
+      userSearchInput.addEventListener('input', () => {
+        const query = (userSearchInput.value || '').toLowerCase().trim();
+        if (!query) {
+          renderUserList(allUsers);
+          return;
+        }
+
+        const filtered = allUsers.filter((u) => {
+          const name = (u.name || '').toLowerCase();
+          const staffId = (u.staff_id || '').toLowerCase();
+          return name.includes(query) || staffId.includes(query);
+        });
+
+        renderUserList(filtered);
+      });
+
+    resetPasswordCancel &&
+      resetPasswordCancel.addEventListener('click', () => {
+        hideModal(resetPasswordModal);
+        currentResetUserId = null;
+      });
+
+    resetPasswordSave &&
+      resetPasswordSave.addEventListener('click', async () => {
+        if (!isAdmin()) {
+          toast('Only admins can reset passwords');
+          return;
+        }
+
+        if (!currentResetUserId) {
+          toast('No user selected');
+          return;
+        }
+
+        const newPassword = (resetPasswordInput && resetPasswordInput.value.trim()) || '';
+        if (!newPassword || newPassword.length !== 4 || !/^\d{4}$/.test(newPassword)) {
+          toast('Password must be exactly 4 digits');
+          return;
+        }
+
+        try {
+          // Hash the password with bcrypt
+          const bcrypt = await import('https://esm.sh/bcryptjs@2.4.3');
+          const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+          const { error } = await supabase
+            .from('users')
+            .update({ password: hashedPassword })
+            .eq('staff_id', currentResetUserId);
+
+          if (error) {
+            console.error('Failed to reset password', error);
+            toast('Failed to reset password');
+            return;
+          }
+
+          toast('Password reset successfully');
+          hideModal(resetPasswordModal);
+          currentResetUserId = null;
+          if (resetPasswordInput) resetPasswordInput.value = '';
+        } catch (err) {
+          console.error('Exception resetting password', err);
+          toast('Failed to reset password');
+        }
+      });
 
     // ---------- SIDEBAR: PROJECT LIST ----------
     const projList = el('projList');
@@ -1163,11 +1569,19 @@ export default function ProjectManagerClient() {
 
       filtered.forEach((p) => {
         const isActive = p.name === activeProjectName;
+        const editBtn = isAdmin()
+          ? `<button class="proj-edit-btn" data-project-id="${esc(p.id)}" title="Edit project name">
+               <svg xmlns="http://www.w3.org/2000/svg" height="16" width="16" viewBox="0 -960 960 960" fill="currentColor">
+                 <path d="M200-200h57l391-391-57-57-391 391v57Zm-80 80v-170l528-527q12-11 26.5-17t30.5-6q16 0 31 6t26 18l55 56q12 11 17.5 26t5.5 30q0 16-5.5 30.5T817-647L290-120H120Zm640-584-56-56 56 56Zm-141 85-28-29 57 57-29-28Z"/>
+               </svg>
+             </button>`
+          : '';
         html += `
         <div class="proj-item ${isActive ? 'active' : ''}" data-name="${esc(
           p.name,
-        )}">
-          ${esc(p.name)}
+        )}" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+          <span class="proj-name" style="flex:1;overflow:hidden;text-overflow:ellipsis;">${esc(p.name)}</span>
+          ${editBtn}
         </div>
       `;
       });
@@ -1177,20 +1591,37 @@ export default function ProjectManagerClient() {
       updateProjectStatusControl();
 
       projList.querySelectorAll<HTMLElement>('.proj-item').forEach((item) => {
-        item.addEventListener('click', () => {
-          activeProjectName = item.getAttribute('data-name') || '';
-          if (contextInfo) {
-            contextInfo.textContent = activeProjectName
-              ? `Project: ${activeProjectName}`
-              : 'All Projects';
-          }
-          buildProjectSidebar();
-          renderTasks();
-          renderKanban();
-          if (viewStages && viewStages.style.display !== 'none') {
-            renderProjectStructure();
-          }
-        });
+        // Handle project name click (not edit button)
+        const projName = item.querySelector('.proj-name');
+        if (projName) {
+          projName.addEventListener('click', () => {
+            activeProjectName = item.getAttribute('data-name') || '';
+            if (contextInfo) {
+              contextInfo.textContent = activeProjectName
+                ? `Project: ${activeProjectName}`
+                : 'All Projects';
+            }
+            buildProjectSidebar();
+            renderTasks();
+            renderKanban();
+            if (viewStages && viewStages.style.display !== 'none') {
+              renderProjectStructure();
+            }
+          });
+        }
+
+        // Handle edit button click
+        const editBtn = item.querySelector<HTMLElement>('.proj-edit-btn');
+        if (editBtn) {
+          editBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            const projectId = editBtn.getAttribute('data-project-id');
+            if (projectId) {
+              openEditProjectNameModal(projectId);
+            }
+          });
+        }
       });
     }
 
@@ -1206,6 +1637,114 @@ export default function ProjectManagerClient() {
           renderProjectStructure();
         }
         updateProjectStatusControl();
+      });
+
+    // ---------- EDIT PROJECT NAME MODAL ----------
+    const editProjectNameModal = el('editProjectNameModal');
+    const editProjectNameInput = el('editProjectNameInput') as HTMLInputElement | null;
+    const editProjectNameCancel = el('editProjectNameCancel');
+    const editProjectNameSave = el('editProjectNameSave');
+    let editingProjectId: string | null = null;
+
+    function openEditProjectNameModal(projectId: string) {
+      if (!isAdmin()) {
+        toast('Only admins can edit project names');
+        return;
+      }
+
+      const project = projects.find((p) => p.id === projectId);
+      if (!project) {
+        toast('Project not found');
+        return;
+      }
+
+      editingProjectId = projectId;
+      if (editProjectNameInput) {
+        editProjectNameInput.value = project.name || '';
+      }
+
+      showModal(editProjectNameModal);
+    }
+
+    editProjectNameCancel &&
+      editProjectNameCancel.addEventListener('click', () => {
+        hideModal(editProjectNameModal);
+        editingProjectId = null;
+      });
+
+    editProjectNameSave &&
+      editProjectNameSave.addEventListener('click', async () => {
+        if (!isAdmin()) {
+          toast('Only admins can edit project names');
+          return;
+        }
+
+        if (!editingProjectId) {
+          toast('No project selected');
+          return;
+        }
+
+        const newName = (editProjectNameInput && editProjectNameInput.value.trim()) || '';
+        if (!newName) {
+          toast('Project name cannot be empty');
+          return;
+        }
+
+        const project = projects.find((p) => p.id === editingProjectId);
+        if (!project) {
+          toast('Project not found');
+          return;
+        }
+
+        const oldName = project.name;
+
+        // Check if name is already taken by another project
+        const duplicate = projects.find(
+          (p) => p.id !== editingProjectId && p.name === newName,
+        );
+        if (duplicate) {
+          toast('A project with this name already exists');
+          return;
+        }
+
+        // Update project name in database
+        const { error } = await supabase
+          .from('projects')
+          .update({ name: newName })
+          .eq('id', editingProjectId);
+
+        if (error) {
+          console.error('Update project name error', error);
+          toast('Failed to update project name');
+          return;
+        }
+
+        // Update tasks that reference this project by project_name
+        await supabase
+          .from('tasks')
+          .update({ project_name: newName })
+          .eq('project_id', editingProjectId);
+
+        toast('Project name updated successfully');
+
+        // Update local cache
+        project.name = newName;
+
+        // Update active project name if this was the active project
+        if (activeProjectName === oldName) {
+          activeProjectName = newName;
+          if (contextInfo) {
+            contextInfo.textContent = `Project: ${newName}`;
+          }
+        }
+
+        hideModal(editProjectNameModal);
+        editingProjectId = null;
+
+        // Refresh UI
+        buildProjectSidebar();
+        renderTasks();
+        renderKanban();
       });
 
     // ---------- ASSIGNEE FILTER OPTIONS ----------
@@ -1236,6 +1775,10 @@ export default function ProjectManagerClient() {
 
       const assigneeFilter = (filterAssignee && filterAssignee.value) || '';
       const statusFilter = (filterStatus && filterStatus.value) || 'Pending';
+      const filterDateFromEl = el('filterDateFrom') as HTMLInputElement | null;
+      const filterDateToEl = el('filterDateTo') as HTMLInputElement | null;
+      const dateFrom = filterDateFromEl?.value || '';
+      const dateTo = filterDateToEl?.value || '';
 
       const visible = tasks.filter((t) => {
         // Permission
@@ -1248,6 +1791,23 @@ export default function ProjectManagerClient() {
         if (assigneeFilter) {
           const list = t.assignees || [];
           if (!list.includes(assigneeFilter)) return false;
+        }
+
+        // Date range filter
+        if (dateFrom || dateTo) {
+          const taskDate = t.due ? new Date(t.due) : null;
+          if (!taskDate) return false;
+
+          if (dateFrom) {
+            const fromDate = new Date(dateFrom);
+            if (taskDate < fromDate) return false;
+          }
+
+          if (dateTo) {
+            const toDate = new Date(dateTo);
+            toDate.setHours(23, 59, 59, 999); // Include the entire end date
+            if (taskDate > toDate) return false;
+          }
         }
 
         // Status filter
@@ -1324,6 +1884,10 @@ export default function ProjectManagerClient() {
 
       const assigneeFilter = (kbFilterAssignee && kbFilterAssignee.value) || '';
       const statusFilter = (kbFilterStatus && kbFilterStatus.value) || 'Pending';
+      const kbFilterDateFromEl = el('kbFilterDateFrom') as HTMLInputElement | null;
+      const kbFilterDateToEl = el('kbFilterDateTo') as HTMLInputElement | null;
+      const dateFrom = kbFilterDateFromEl?.value || '';
+      const dateTo = kbFilterDateToEl?.value || '';
 
       const filtered = tasks.filter((t) => {
         if (!userCanSeeTask(t)) return false;
@@ -1332,6 +1896,23 @@ export default function ProjectManagerClient() {
         if (assigneeFilter) {
           const list = t.assignees || [];
           if (!list.includes(assigneeFilter)) return false;
+        }
+
+        // Date range filter
+        if (dateFrom || dateTo) {
+          const taskDate = t.due ? new Date(t.due) : null;
+          if (!taskDate) return false;
+
+          if (dateFrom) {
+            const fromDate = new Date(dateFrom);
+            if (taskDate < fromDate) return false;
+          }
+
+          if (dateTo) {
+            const toDate = new Date(dateTo);
+            toDate.setHours(23, 59, 59, 999); // Include the entire end date
+            if (taskDate > toDate) return false;
+          }
         }
 
         if (statusFilter === 'All') return true;
@@ -1405,7 +1986,7 @@ export default function ProjectManagerClient() {
           const touch = ev.touches[0];
           const deltaY = Math.abs(touch.clientY - touchStartY);
           const deltaX = Math.abs(touch.clientX - touchStartX);
-          
+
           if ((deltaY > 10 || deltaX > 10) && !isDragging) {
             isDragging = true;
             card.classList.add('dragging');
@@ -1414,7 +1995,7 @@ export default function ProjectManagerClient() {
             card.style.width = '280px';
             card.style.pointerEvents = 'none';
           }
-          
+
           if (isDragging) {
             card.style.left = (touch.clientX - 140) + 'px';
             card.style.top = (touch.clientY - 30) + 'px';
@@ -1423,11 +2004,11 @@ export default function ProjectManagerClient() {
 
         card.addEventListener('touchend', (ev) => {
           if (!isDragging) return;
-          
+
           const touch = ev.changedTouches[0];
           const elementBelow = document.elementFromPoint(touch.clientX, touch.clientY);
           const dropZone = elementBelow?.closest('.kdrop');
-          
+
           // Reset card styles
           card.classList.remove('dragging');
           card.style.position = '';
@@ -1437,14 +2018,14 @@ export default function ProjectManagerClient() {
           card.style.top = '';
           card.style.pointerEvents = '';
           card.style.transition = '';
-          
+
           if (dropZone && dropZone.dataset.status) {
             const newStatus = dropZone.dataset.status;
             if (newStatus !== status) {
               changeTaskStatusFromKanban(String(t.id), newStatus);
             }
           }
-          
+
           isDragging = false;
           draggedElement = null;
         });
@@ -1512,7 +2093,7 @@ export default function ProjectManagerClient() {
 
     mobileMenuBtn && mobileMenuBtn.addEventListener('click', openMobileMenu);
     mobileOverlay && mobileOverlay.addEventListener('click', closeMobileMenu);
-    
+
     // Close mobile menu when clicking on sidebar links
     const sidebarLinks = container.querySelectorAll('.proj-item, .btn');
     sidebarLinks.forEach(link => {
@@ -1530,9 +2111,9 @@ export default function ProjectManagerClient() {
     // ---------- KANBAN IMPROVEMENTS ---------- 
     const updateKanbanCounts = () => {
       const countPending = el('countPending');
-      const countProgress = el('countProgress'); 
+      const countProgress = el('countProgress');
       const countDone = el('countDone');
-      
+
       if (countPending) {
         const pendingCards = container.querySelectorAll('#colPending .kcard').length;
         countPending.textContent = pendingCards.toString();
@@ -1746,10 +2327,10 @@ export default function ProjectManagerClient() {
         if (btnLogout) btnLogout.style.display = 'none';
         const notificationBell = el('notificationBell');
         if (notificationBell) notificationBell.style.display = 'none';
-        
+
         // Close mobile menu if open
         closeMobileMenu();
-        
+
         buildProjectSidebar();
         refreshAssigneeFilters();
         renderTasks();
@@ -2540,7 +3121,7 @@ export default function ProjectManagerClient() {
         const canEditTask =
           isAdmin() ||
           editingTask.created_by_id === currentUser?.staff_id ||
-          isProjectLeadFor(project);
+          isProjectLeadFor(project.id);
 
         if (!canEditTask) {
           toast('You do not have permission to modify this task.');
@@ -2621,7 +3202,7 @@ export default function ProjectManagerClient() {
 
         // Creation permission check: Admin or Lead for THIS project
         if (!editingTask) {
-          if (!isAdmin() && !isProjectLeadFor(project)) {
+          if (!isAdmin() && !isProjectLeadFor(project.id)) {
             toast('Only Admins or Project Leads can create tasks for this project.');
             return;
           }
@@ -2649,7 +3230,7 @@ export default function ProjectManagerClient() {
           (c) => c.getAttribute('data-name') || c.value,
         );
 
-        const isLeadForProject = isProjectLeadFor(project, currentUser);
+        const isLeadForProject = isProjectLeadFor(project.id);
 
         if (isAdmin()) {
           // keep as-is
@@ -2686,7 +3267,7 @@ export default function ProjectManagerClient() {
               const projForTask = projects.find(
                 (p) => p.id === editingTask.project_id,
               );
-              if (projForTask && isProjectLeadFor(projForTask, currentUser)) {
+              if (projForTask && isProjectLeadFor(projForTask.id)) {
                 canEdit = true;
               }
             }
@@ -2958,7 +3539,7 @@ export default function ProjectManagerClient() {
           const canEdit =
             isAdmin() ||
             task.created_by_id === currentUser.staff_id ||
-            (projForTask && isProjectLeadFor(projForTask, currentUser));
+            (projForTask && isProjectLeadFor(projForTask.id));
 
           if (!canEdit) {
             toast('Only creator, Admin or project lead can edit this task');
@@ -3064,6 +3645,16 @@ export default function ProjectManagerClient() {
           },
         ]);
 
+        // Notify admins and project leads
+        if (currentUser) {
+          await handleTaskStatusChange(
+            selectedTask,
+            prevStatus,
+            'Complete',
+            currentUser.name || currentUser.staff_id
+          );
+        }
+
         hideModal(doneModal);
         toast('Task marked complete');
         await loadDataAfterLogin();
@@ -3109,6 +3700,16 @@ export default function ProjectManagerClient() {
             changed_by_name: currentUser ? currentUser.name : null,
           },
         ]);
+
+        // Notify admins and project leads
+        if (currentUser) {
+          await handleTaskStatusChange(
+            selectedTask,
+            prevStatus,
+            newStatus,
+            currentUser.name || currentUser.staff_id
+          );
+        }
 
         hideModal(statusModal);
         toast('Status updated');
@@ -3279,6 +3880,100 @@ export default function ProjectManagerClient() {
         });
     }
 
+    // ---------- RENDER PROJECT INFO CARD ----------
+    async function renderProjectInfoCard(proj: any) {
+      const projectInfoCard = el('projectInfoCard');
+      if (!projectInfoCard) return;
+
+      // Calculate task statistics for this project
+      const projectTasks = tasks.filter((t) => t.project_id === proj.id);
+      const completedTasks = projectTasks.filter((t) => t.status === 'Complete').length;
+      const totalTasks = projectTasks.length;
+
+      // Get project leads
+      const leadIds = proj.lead_ids || [];
+      const leadNames: string[] = [];
+
+      // Fetch lead names from users
+      if (leadIds.length > 0) {
+        try {
+          const { data: leadUsers } = await supabase
+            .from('users')
+            .select('name, staff_id')
+            .in('staff_id', leadIds);
+
+          if (leadUsers) {
+            leadNames.push(...leadUsers.map((u) => u.name || u.staff_id));
+          }
+        } catch (err) {
+          console.error('Failed to fetch lead users', err);
+        }
+      }
+
+      const status = proj.status || proj.project_status || 'Ongoing';
+      const createdAt = proj.created_at
+        ? new Date(proj.created_at).toLocaleDateString()
+        : 'N/A';
+
+      // Calculate completion percentage
+      const completionPercentage = totalTasks > 0
+        ? Math.round((completedTasks / totalTasks) * 100)
+        : 0;
+
+      projectInfoCard.style.display = '';
+      projectInfoCard.innerHTML = `
+        <div class="card" style="background:#f8fafc;border:2px solid var(--line-strong);">
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;">
+            
+            <!-- Project Name & Type -->
+            <div>
+              <div class="small muted" style="text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Project</div>
+              <div style="font-weight:700;font-size:16px;margin-bottom:4px;">${esc(proj.name || 'Unnamed Project')}</div>
+              <div class="small muted">Type: ${esc(proj.type || 'Not specified')}</div>
+            </div>
+
+            <!-- Task Completion -->
+            <div>
+              <div class="small muted" style="text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Tasks</div>
+              <div style="font-weight:700;font-size:20px;color:var(--accent);">${completedTasks}/${totalTasks}</div>
+              <div class="small muted">${completionPercentage}% Complete</div>
+              <div style="width:100%;height:6px;background:#e5e7eb;border-radius:3px;margin-top:6px;overflow:hidden;">
+                <div style="width:${completionPercentage}%;height:100%;background:var(--green);transition:width 0.3s;"></div>
+              </div>
+            </div>
+
+            <!-- Project Status -->
+            <div>
+              <div class="small muted" style="text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Status</div>
+              <div style="font-weight:700;font-size:16px;">
+                <span class="badge" style="${status === 'Complete' ? 'background:#d1fae5;border-color:#10b981;color:#065f46;' :
+          status === 'On Hold' ? 'background:#fee2e2;border-color:#ef4444;color:#991b1b;' :
+            'background:#dbeafe;border-color:#3b82f6;color:#1e40af;'
+        }">${esc(status)}</span>
+              </div>
+            </div>
+
+            <!-- Project Leads -->
+            <div>
+              <div class="small muted" style="text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Project Lead${leadNames.length !== 1 ? 's' : ''}</div>
+              <div style="font-weight:600;font-size:14px;">
+                ${leadNames.length > 0
+          ? leadNames.map(name => `<div style="margin-bottom:2px;">${esc(name)}</div>`).join('')
+          : '<span class="muted">No leads assigned</span>'}
+              </div>
+            </div>
+
+            <!-- Created Date -->
+            <div>
+              <div class="small muted" style="text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Created</div>
+              <div style="font-weight:600;font-size:14px;">${createdAt}</div>
+            </div>
+
+          </div>
+        </div>
+      `;
+    }
+
     function renderProjectStructure() {
       if (!stagesBox) return;
 
@@ -3340,6 +4035,11 @@ export default function ProjectManagerClient() {
                 }>Complete</option>
                       </select>
                     </div>
+                    <div>
+                      <button class="btn-sm btn-danger proj-delete-btn" data-project-id="${esc(p.id)}" data-project-name="${esc(p.name || '')}" title="Delete project">
+                        Delete
+                      </button>
+                    </div>
                   </div>
                 </div>
               `;
@@ -3400,6 +4100,63 @@ export default function ProjectManagerClient() {
             });
           });
 
+        // Add delete button event listeners
+        stagesBox
+          .querySelectorAll<HTMLButtonElement>('.proj-delete-btn')
+          .forEach((btn) => {
+            btn.addEventListener('click', async () => {
+              if (!isAdmin()) {
+                toast('Only admins can delete projects');
+                return;
+              }
+
+              const projId = btn.getAttribute('data-project-id');
+              const projName = btn.getAttribute('data-project-name');
+
+              if (!projId || !projName) return;
+
+              const confirmed = confirm(
+                `Are you sure you want to delete project "${projName}"?\n\n` +
+                `This will permanently delete:\n` +
+                `- The project itself\n` +
+                `- All associated tasks\n` +
+                `- All task history\n\n` +
+                `This action cannot be undone!`
+              );
+
+              if (!confirmed) return;
+
+              try {
+                // Delete project (this should cascade delete tasks due to foreign key constraints)
+                const { error } = await supabase
+                  .from('projects')
+                  .delete()
+                  .eq('id', projId);
+
+                if (error) {
+                  console.error('Failed to delete project', error);
+                  toast('Failed to delete project');
+                  return;
+                }
+
+                toast('Project deleted successfully');
+
+                // Remove from local projects array
+                const index = projects.findIndex((p) => p.id === projId);
+                if (index !== -1) {
+                  projects.splice(index, 1);
+                }
+
+                // Refresh UI
+                await loadDataAfterLogin();
+                renderProjectStructure();
+              } catch (e) {
+                console.error('Exception deleting project', e);
+                toast('Failed to delete project');
+              }
+            });
+          });
+
         return;
       }
 
@@ -3411,8 +4168,16 @@ export default function ProjectManagerClient() {
         </div>
       `;
         if (layoutActions) layoutActions.style.display = 'none';
+
+        // Hide project info card when no project selected
+        const projectInfoCard = el('projectInfoCard');
+        if (projectInfoCard) projectInfoCard.style.display = 'none';
+
         return;
       }
+
+      // Render project info card
+      renderProjectInfoCard(proj);
 
       const canEdit = canEditProjectLayout(proj);
       if (layoutActions) {
@@ -3701,6 +4466,7 @@ export default function ProjectManagerClient() {
         btnNewProject.style.display = 'none';
         btnAddUser.style.display = 'none';
         btnNewTask.style.display = 'none';
+        if (userManagementEntry) userManagementEntry.style.display = 'none';
         return;
       }
 
@@ -3708,10 +4474,12 @@ export default function ProjectManagerClient() {
         btnNewProject.style.display = '';
         btnAddUser.style.display = '';
         btnNewTask.style.display = '';
+        if (userManagementEntry) userManagementEntry.style.display = '';
       } else {
         btnNewProject.style.display = 'none';
         btnAddUser.style.display = 'none';
         btnNewTask.style.display = userIsLeadAnywhere() ? '' : 'none';
+        if (userManagementEntry) userManagementEntry.style.display = 'none';
       }
     }
 
