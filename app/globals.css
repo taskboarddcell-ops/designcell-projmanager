@@ -1084,9 +1084,12 @@ tr.low {
   border: 2px solid #e2e8f0;
   border-radius: 8px;
   margin-bottom: 16px;
-  overflow: hidden;
+  /* Removed overflow: hidden to prevent clipping issues */
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-  transition: all 0.2s;
+  /* Removed transition: all which can cause height glitches */
+  display: flex;
+  /* Ensure proper stacking context */
+  flex-direction: column;
 }
 
 .editor-stage-card:hover {
