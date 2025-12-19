@@ -3809,23 +3809,25 @@ export default function ProjectManagerClient() {
       // Add event delegation for sub-assign buttons
       const stagesBox = el('stagesBox');
       if (stagesBox) {
-        // Remove any existing listener to avoid duplicates
-        const newStagesBox = stagesBox.cloneNode(true) as HTMLElement;
-        stagesBox.parentNode?.replaceChild(newStagesBox, stagesBox);
+        // Use a flag to prevent duplicate listeners
+        if (!(stagesBox as any)._hasAssignListener) {
+          (stagesBox as any)._hasAssignListener = true;
 
-        newStagesBox.addEventListener('click', async (ev) => {
-          const target = ev.target as HTMLElement;
-          if (!target || !target.classList.contains('sub-assign')) return;
+          stagesBox.addEventListener('click', async (ev) => {
+            const target = ev.target as HTMLElement;
+            if (!target || !target.classList.contains('sub-assign')) return;
 
-          ev.stopPropagation();
-          const stageName = target.getAttribute('data-stage') || '';
-          const subName = target.getAttribute('data-sub') || '';
-          const taskId = target.getAttribute('data-task-id') || '';
+            ev.stopPropagation();
+            const stageName = target.getAttribute('data-stage') || '';
+            const subName = target.getAttribute('data-sub') || '';
+            const taskId = target.getAttribute('data-task-id') || '';
 
-          await openSubstageAssign(stageName, subName, taskId);
-        });
+            await openSubstageAssign(stageName, subName, taskId);
+          });
+        }
       }
     }
+
 
     // ---------- RENDER PROJECT INFO CARD ----------
     async function renderProjectInfoCard(proj: any) {
