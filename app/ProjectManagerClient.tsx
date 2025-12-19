@@ -688,7 +688,7 @@ export default function ProjectManagerClient() {
 
     // State for project filtering
     let projectYearFilter = 'All';
-    let projectTypesCache: string[] | null = null;
+
 
     // ---------- SESSION MANAGEMENT ----------
     const SESSION_KEY = 'pm_session';
@@ -3721,12 +3721,15 @@ export default function ProjectManagerClient() {
       const closeBtn = el('stAssignClose');
 
       let selectedExistingTask: any = null;
+      let bulkAssignStageName: string | null = null; // New state for bulk assign
 
       const openSubstageAssign = async (
         stageName: string,
         subName: string,
         existingTaskId?: string,
       ) => {
+        bulkAssignStageName = null; // Reset bulk mode
+        if (subSel) subSel.disabled = false;
         if (!projectUsersCache[proj.id]) {
           await loadProjectUsers(proj.id);
         }
@@ -3775,8 +3778,42 @@ export default function ProjectManagerClient() {
         panel.classList.add('show');
       };
 
+      // New function for Bulk Assign
+      const openStageBulkAssign = async (stageName: string) => {
+        if (!projectUsersCache[proj.id]) {
+          await loadProjectUsers(proj.id);
+        }
+
+        bulkAssignStageName = stageName;
+        selectedExistingTask = null;
+
+        if (stageSel) stageSel.value = stageName;
+        if (subSel) {
+          subSel.value = '(All Sub-stages)';
+          subSel.disabled = true;
+        }
+
+        if (assignList) assignList.innerHTML = '';
+        if (assignList && projectUsersCache[proj.id]) {
+          projectUsersCache[proj.id].forEach((u) => {
+            assignList.innerHTML += `
+            <label class="chk-line">
+              <input type="checkbox" class="asgU" value="${esc(
+              u.staff_id,
+            )}" data-name="${esc(u.name || '')}">
+              <span>${esc(u.name || '')} [${esc(u.staff_id)}]</span>
+            </label>
+          `;
+          });
+        }
+
+        if (assignBtn) assignBtn.textContent = 'Bulk Assign Tasks';
+        panel.classList.add('show');
+      };
+
       // Expose function on window for stage/sub rows
       (window as any).openSubstageAssign = openSubstageAssign;
+      (window as any).openStageBulkAssign = openStageBulkAssign;
 
       closeBtn &&
         closeBtn.addEventListener('click', () => {
@@ -3797,6 +3834,74 @@ export default function ProjectManagerClient() {
             toast('Only project leads or admins can assign/edit tasks here');
             return;
           }
+
+          // --- BULK ASSIGN LOGIC ---
+          if (bulkAssignStageName) {
+            const rawPlan = proj.stage_plan || [];
+            const plan = Array.isArray(rawPlan) ? rawPlan : [];
+            const stage = plan.find((s: any) => (s.stage || s.name) === bulkAssignStageName);
+
+            if (!stage) {
+              toast('Stage not found');
+              return;
+            }
+
+            const subs = stage.subs || stage.sub_stages || [];
+            if (subs.length === 0) {
+              toast('No sub-stages to assign');
+              return;
+            }
+
+            const checked = assignList?.querySelectorAll<HTMLInputElement>('.asgU:checked');
+            const selectedIds: string[] = [];
+            checked?.forEach((c) => selectedIds.push(c.value));
+
+            let updateCount = 0;
+            // Iterate all substages and upsert tasks
+            for (const sub of subs) {
+              const existing = tasks.find(
+                (t) =>
+                  t.project_id === proj.id &&
+                  (t.stage_id || '') === bulkAssignStageName &&
+                  (t.sub_id || '') === sub
+              );
+
+              if (existing) {
+                // Update existing task
+                await supabase
+                  .from('tasks')
+                  .update({ assignee_ids: selectedIds })
+                  .eq('id', existing.id);
+                existing.assignee_ids = selectedIds;
+              } else {
+                // Create new task
+                const { data } = await supabase
+                  .from('tasks')
+                  .insert({
+                    project_id: proj.id,
+                    stage_id: bulkAssignStageName,
+                    sub_id: sub,
+                    assignee_ids: selectedIds,
+                    status: 'Pending',
+                    task: `${bulkAssignStageName} - ${sub}`,
+                  })
+                  .select();
+
+                if (data && data[0]) tasks.push(data[0]);
+              }
+              updateCount++;
+            }
+
+            toast(`Bulk assigned ${updateCount} tasks`);
+            panel.classList.remove('show');
+            renderProjectStructure(); // Refresh UI
+
+            // Clean up
+            bulkAssignStageName = null;
+            if (subSel) subSel.disabled = false;
+            return;
+          }
+          // --- END BULK ASSIGN ---
 
           const chosen = assignList
             ? Array.from(
@@ -4320,7 +4425,10 @@ export default function ProjectManagerClient() {
 
             return `
             <div class="card" style="margin-bottom:8px">
-              <div><strong>${esc(stName)}</strong></div>
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+                 <div><strong>${esc(stName)}</strong></div>
+                 ${canEdit ? `<button class="btn-xs stage-bulk-assign" data-stage="${esc(stName)}" style="padding:2px 8px;font-size:11px;background:var(--bg-hover);">Bulk Assign</button>` : ''}
+              </div>
               ${subsHtml}
             </div>
           `;
@@ -4337,6 +4445,17 @@ export default function ProjectManagerClient() {
         }
 
         wireSubstageAssignUI(proj);
+
+        // Wire up Bulk Assign buttons
+        stagesBox.querySelectorAll<HTMLElement>('.stage-bulk-assign').forEach((btn) => {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const stage = btn.getAttribute('data-stage');
+            if (stage && (window as any).openStageBulkAssign) {
+              (window as any).openStageBulkAssign(stage);
+            }
+          });
+        });
       } else {
         const planRaw = proj.stage_plan || [];
         const planArray = Array.isArray(planRaw)
