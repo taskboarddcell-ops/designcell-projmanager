@@ -3713,19 +3713,8 @@ export default function ProjectManagerClient() {
         panel.classList.add('show');
       };
 
-      // Wire up buttons
-      const container = document.getElementById('stagesBox');
-      if (container) {
-        container.querySelectorAll<HTMLElement>('.sub-assign').forEach((btn) => {
-          btn.addEventListener('click', (e) => {
-            e.stopPropagation(); // prevent collapsing stage
-            const stage = btn.getAttribute('data-stage') || '';
-            const sub = btn.getAttribute('data-sub') || '';
-            const tid = btn.getAttribute('data-task-id') || undefined;
-            openSubstageAssign(stage, sub, tid);
-          });
-        });
-      }
+      // Expose function on window for stage/sub rows
+      (window as any).openSubstageAssign = openSubstageAssign;
 
       closeBtn &&
         closeBtn.addEventListener('click', () => {
@@ -4215,6 +4204,7 @@ export default function ProjectManagerClient() {
                           <span>${esc(subName)}</span>
                           <button type="button"
                                   class="btn-sm sub-assign"
+                                  onclick="event.stopPropagation(); window.openSubstageAssign(this.dataset.stage, this.dataset.sub, this.dataset.taskId)"
                                   data-stage="${esc(stageName)}"
                                   data-sub="${esc(subName)}"
                                   data-task-id="${primary ? esc(primary.id) : ''}">
