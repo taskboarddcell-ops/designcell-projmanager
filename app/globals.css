@@ -1238,17 +1238,18 @@ tr.low {
   transform: scale(1.1);
 }
 
+/* btn-sm style per user request */
 .btn-sm {
-  font-size: 13px;
-  padding: 6px 12px;
-  border-radius: 6px;
-  border: 1px solid #cbd5e1;
-  background: #fff;
   cursor: pointer;
-  font-weight: 600;
   color: #475569;
-  transition: all 0.2s;
   white-space: nowrap;
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  transition: all .2s;
 }
 
 .btn-sm:hover {

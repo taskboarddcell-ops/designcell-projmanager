@@ -815,6 +815,8 @@ export default function ProjectManagerClient() {
       if (isAdmin()) return true;
       if (isAssignee(task.assignee_ids || [])) return true;
       if (task.created_by_id === currentUser.staff_id) return true;
+      // Project leads should see tasks in their projects
+      if (task.project_id && isProjectLeadFor(task.project_id)) return true;
       return false;
     };
 
@@ -3651,8 +3653,7 @@ export default function ProjectManagerClient() {
 
       let selectedExistingTask: any = null;
 
-      // Expose function on window for stage/sub rows
-      (window as any).openSubstageAssign = async (
+      const openSubstageAssign = async (
         stageName: string,
         subName: string,
         existingTaskId?: string,
@@ -3704,6 +3705,20 @@ export default function ProjectManagerClient() {
 
         panel.classList.add('show');
       };
+
+      // Wire up buttons
+      const container = document.getElementById('activeProjectStages');
+      if (container) {
+        container.querySelectorAll<HTMLElement>('.sub-assign').forEach((btn) => {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation(); // prevent collapsing stage
+            const stage = btn.getAttribute('data-stage') || '';
+            const sub = btn.getAttribute('data-sub') || '';
+            const tid = btn.getAttribute('data-task-id') || undefined;
+            openSubstageAssign(stage, sub, tid);
+          });
+        });
+      }
 
       closeBtn &&
         closeBtn.addEventListener('click', () => {
@@ -4193,10 +4208,9 @@ export default function ProjectManagerClient() {
                           <span>${esc(subName)}</span>
                           <button type="button"
                                   class="btn-sm sub-assign"
-                                  onclick="openSubstageAssign('${esc(
-                    stageName,
-                  )}','${esc(subName)}',${primary ? `'${esc(primary.id)}'` : 'null'
-                    })">
+                                  data-stage="${esc(stageName)}"
+                                  data-sub="${esc(subName)}"
+                                  data-task-id="${primary ? esc(primary.id) : ''}">
                             ${esc(buttonLabel)}
                           </button>
                         </div>
