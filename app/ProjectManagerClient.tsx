@@ -1462,7 +1462,9 @@ export default function ProjectManagerClient() {
 
         if (error) {
           console.error('Failed to delete user', error);
-          toast('Failed to delete user');
+          const errorMsg = error.message || error.details || 'Failed to delete user';
+          toast(`Delete failed: ${errorMsg}`);
+          alert(`Could not delete user.\n\nError: ${errorMsg}\n\nThis may be due to:\n- Row-Level Security policies\n- Foreign key constraints (user has related data)\n- Insufficient permissions`);
           return;
         }
 
@@ -3523,7 +3525,7 @@ export default function ProjectManagerClient() {
       doneOK.addEventListener('click', async () => {
         if (!selectedTask) return;
 
-        if (!isAssignee(selectedTask)) {
+        if (!isAssignee(selectedTask.assignee_ids || [])) {
           toast('Only assignees can complete this task');
           return;
         }
@@ -3803,6 +3805,26 @@ export default function ProjectManagerClient() {
           panel.classList.remove('show');
           await loadDataAfterLogin();
         });
+
+      // Add event delegation for sub-assign buttons
+      const stagesBox = el('stagesBox');
+      if (stagesBox) {
+        // Remove any existing listener to avoid duplicates
+        const newStagesBox = stagesBox.cloneNode(true) as HTMLElement;
+        stagesBox.parentNode?.replaceChild(newStagesBox, stagesBox);
+
+        newStagesBox.addEventListener('click', async (ev) => {
+          const target = ev.target as HTMLElement;
+          if (!target || !target.classList.contains('sub-assign')) return;
+
+          ev.stopPropagation();
+          const stageName = target.getAttribute('data-stage') || '';
+          const subName = target.getAttribute('data-sub') || '';
+          const taskId = target.getAttribute('data-task-id') || '';
+
+          await openSubstageAssign(stageName, subName, taskId);
+        });
+      }
     }
 
     // ---------- RENDER PROJECT INFO CARD ----------
@@ -4204,7 +4226,6 @@ export default function ProjectManagerClient() {
                           <span>${esc(subName)}</span>
                           <button type="button"
                                   class="btn-sm sub-assign"
-                                  onclick="event.stopPropagation(); window.openSubstageAssign(this.dataset.stage, this.dataset.sub, this.dataset.taskId)"
                                   data-stage="${esc(stageName)}"
                                   data-sub="${esc(subName)}"
                                   data-task-id="${primary ? esc(primary.id) : ''}">
