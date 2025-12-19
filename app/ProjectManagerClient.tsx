@@ -325,7 +325,7 @@ const staticHtml = `
         <div class="small muted" style="margin-bottom:4px">
           Stage layout (Stage &rarr; Sub-stages)
         </div>
-        <div class="list" id="stagePlanEditor" style="max-height:360px;overflow:auto"></div>
+        <div class="list" id="stagePlanEditor" style="max-height:500px;overflow-y:auto;overflow-x:hidden;padding:4px"></div>
       </div>
 
       <div class="row" style="margin-top:8px">
