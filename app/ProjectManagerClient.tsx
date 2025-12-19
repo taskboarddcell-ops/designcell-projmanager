@@ -3714,7 +3714,7 @@ export default function ProjectManagerClient() {
       };
 
       // Wire up buttons
-      const container = document.getElementById('activeProjectStages');
+      const container = document.getElementById('stagesBox');
       if (container) {
         container.querySelectorAll<HTMLElement>('.sub-assign').forEach((btn) => {
           btn.addEventListener('click', (e) => {
