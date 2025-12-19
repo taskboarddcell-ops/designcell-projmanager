@@ -680,6 +680,16 @@ export default function ProjectManagerClient() {
     let editingTask: any = null;
     let projectTypesCache: string[] | null = null;
 
+    // Helper to extract year from project name (YYYY-...)
+    const getProjectYear = (name: string): number => {
+      const match = (name || '').match(/^(\d{4})/);
+      return match ? parseInt(match[1], 10) : 9999;
+    };
+
+    // State for project filtering
+    let projectYearFilter = 'All';
+    let projectTypesCache: string[] | null = null;
+
     // ---------- SESSION MANAGEMENT ----------
     const SESSION_KEY = 'pm_session';
     const SESSION_TIMEOUT_MS = 60 * 60 * 1000; // 1 hour
@@ -806,8 +816,8 @@ export default function ProjectManagerClient() {
       return currentUser?.access_level === 'Admin';
     };
 
-    const isAssignee = (taskAssignees: string[]) => {
-      return currentUser && taskAssignees.includes(currentUser.staff_id);
+    const isAssignee = (taskAssignees: string[] | null | undefined) => {
+      return currentUser && Array.isArray(taskAssignees) && taskAssignees.includes(currentUser.staff_id);
     };
 
     const userCanSeeTask = (task: any) => {
@@ -1457,7 +1467,18 @@ export default function ProjectManagerClient() {
       console.log('[DELETE-USER] Attempting to delete:', { userId, userName });
 
       try {
-        // Use .select() to return deleted rows for verification
+        // Step 1: Delete references in notifications table to prevent Foreign Key errors
+        const { error: notifError } = await supabase
+          .from('notifications')
+          .delete()
+          .eq('user_id', userId);
+
+        if (notifError) {
+          console.warn('[DELETE-USER] Warning cleaning up notifications:', notifError);
+          // Continue anyway, as it might not be a blocker or might be empty
+        }
+
+        // Step 2: Delete the user using .select() to verify
         const { data: deletedRows, error } = await supabase
           .from('users')
           .delete()
@@ -1577,9 +1598,9 @@ export default function ProjectManagerClient() {
       const q = ((projSearch && projSearch.value) || '')
         .toLowerCase()
         .trim();
-      const filtered = projects.filter((p) =>
-        !q || (p.name || '').toLowerCase().includes(q),
-      );
+      const filtered = projects
+        .filter((p) => !q || (p.name || '').toLowerCase().includes(q))
+        .sort((a, b) => getProjectYear(a.name) - getProjectYear(b.name)); // Ascending by year
 
       let html = `
       <div class="proj-item ${activeProjectName ? '' : 'active'}" data-name="">
@@ -3974,19 +3995,27 @@ export default function ProjectManagerClient() {
       if (isAllProjects) {
         if (layoutActions) layoutActions.style.display = 'none';
 
-        const sorted = [...projects].sort((a, b) =>
-          (a.name || '').localeCompare(b.name || ''),
-        );
+        // Calculate years from project names
+        const uniqueYears = Array.from(new Set(projects.map(p => getProjectYear(p.name)).filter(y => y !== 9999))).sort((a, b) => a - b);
+        const yearOptions = uniqueYears.map(y => `<option value="${y}" ${projectYearFilter === y.toString() ? 'selected' : ''}>${y}</option>`).join('');
+
+        const sorted = [...projects]
+          .filter(p => projectYearFilter === 'All' || getProjectYear(p.name).toString() === projectYearFilter)
+          .sort((a, b) => getProjectYear(a.name) - getProjectYear(b.name));
 
         stagesBox.innerHTML = `
         <div class="card" style="margin-bottom:8px;">
           <div class="row" style="align-items:center;gap:8px;">
             <div class="small muted">All Projects — Set status</div>
             <div style="flex:1;"></div>
+            <select id="projYearFilter" class="select" style="max-width:120px; margin-right:8px;">
+              <option value="All" ${projectYearFilter === 'All' ? 'selected' : ''}>All Years</option>
+              ${yearOptions}
+            </select>
             <input
               id="projStatusFilter"
               class="input"
-              placeholder="Filter projects..."
+              placeholder="Filter by name..."
               style="max-width:260px;"
             />
           </div>
@@ -4048,6 +4077,14 @@ export default function ProjectManagerClient() {
               const name = row.getAttribute('data-name') || '';
               row.style.display = !q || name.includes(q) ? '' : 'none';
             });
+          });
+        }
+
+        const yearSelect = stagesBox.querySelector<HTMLSelectElement>('#projYearFilter');
+        if (yearSelect) {
+          yearSelect.addEventListener('change', (ev) => {
+            projectYearFilter = (ev.target as HTMLSelectElement).value;
+            renderProjectStructure();
           });
         }
 
