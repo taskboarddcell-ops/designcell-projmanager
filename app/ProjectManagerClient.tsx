@@ -2479,6 +2479,127 @@ export default function ProjectManagerClient() {
     }
 
     // ---------- STAGE PLAN EDITOR ----------
+    // Helper to wire up events for a stage row (toggle, delete, add sub-stage, insert below)
+    function wireStageRow(row: HTMLElement) {
+      const subList = row.querySelector<HTMLElement>('.editor-sub-list');
+      const subAdd = row.querySelector<HTMLElement>('.sub-add');
+      const stageDel = row.querySelector<HTMLElement>('.stage-del');
+      const insertBelow = row.querySelector<HTMLElement>('.stage-insert-below');
+      const toggleBtn = row.querySelector<HTMLElement>('.editor-toggle-btn');
+      const stageNameInput = row.querySelector<HTMLElement>('.editor-stage-name');
+
+      // Toggle visibility
+      toggleBtn &&
+        toggleBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (subList) {
+            subList.classList.toggle('hidden');
+            toggleBtn.classList.toggle('collapsed');
+          }
+        });
+
+      // Add sub-stage
+      subAdd &&
+        subAdd.addEventListener('click', () => {
+          if (!subList) return;
+          // Ensure open if adding
+          if (subList.classList.contains('hidden')) {
+            subList.classList.remove('hidden');
+            toggleBtn && toggleBtn.classList.remove('collapsed');
+          }
+
+          const div = document.createElement('div');
+          div.className = 'editor-sub-row';
+          div.innerHTML = `
+            <input class="editor-sub-name" placeholder="Sub-stage name">
+            <button type="button" class="btn-icon sub-del" title="Remove sub-stage">
+              <svg xmlns="http://www.w3.org/2000/svg" height="18" viewBox="0 -960 960 960" width="18" fill="#ef4444"><path d="M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520ZM360-280h80v-360h-80v360Zm160 0h80v-360h-80v360ZM280-720v520-520Z"/></svg>
+            </button>
+          `;
+          subList.insertBefore(div, subAdd);
+
+          // Wire delete button for this new sub-stage
+          const delBtn = div.querySelector<HTMLElement>('.sub-del');
+          delBtn &&
+            delBtn.addEventListener('click', () => {
+              div.remove();
+            });
+
+          // Focus the new input
+          const input = div.querySelector<HTMLElement>('input');
+          if (input) input.focus();
+        });
+
+      // Delete sub-stages (existing ones)
+      if (subList) {
+        subList.querySelectorAll<HTMLElement>('.sub-del').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const parent = btn.closest('.editor-sub-row');
+            parent && parent.remove();
+          });
+        });
+      }
+
+      // Delete stage
+      stageDel &&
+        stageDel.addEventListener('click', () => {
+          if (confirm('Delete this entire stage?')) {
+            row.remove();
+          }
+        });
+
+      // Insert stage below
+      insertBelow &&
+        insertBelow.addEventListener('click', () => {
+          const newRow = createStageRowDOM();
+          row.insertAdjacentElement('afterend', newRow);
+          wireStageRow(newRow);
+          // Focus new stage name
+          const input = newRow.querySelector<HTMLElement>('.editor-stage-name');
+          if (input) input.focus();
+        });
+    }
+
+    // Helper to create the DOM structure for a stage row
+    function createStageRowDOM(stageName = '', subStages: string[] = []) {
+      const subsHtml = subStages
+        .map(
+          (s) => `
+            <div class="editor-sub-row">
+              <input class="editor-sub-name" value="${esc(s)}" placeholder="Sub-stage name">
+              <button type="button" class="btn-icon sub-del" title="Remove sub-stage">
+                <svg xmlns="http://www.w3.org/2000/svg" height="18" viewBox="0 -960 960 960" width="18" fill="#ef4444"><path d="M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520ZM360-280h80v-360h-80v360Zm160 0h80v-360h-80v360ZM280-720v520-520Z"/></svg>
+              </button>
+            </div>
+          `
+        )
+        .join('');
+
+      const div = document.createElement('div');
+      div.className = 'editor-stage-card';
+      div.innerHTML = `
+        <div class="editor-stage-header">
+          <button type="button" class="editor-toggle-btn" title="Toggle">
+            <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 -960 960 960" width="24" fill="#64748b"><path d="M480-345 240-585l56-56 184 184 184-184 56 56-240 240Z"/></svg>
+          </button>
+          <input class="editor-stage-name" value="${esc(stageName)}" placeholder="Stage name">
+          <div class="editor-actions">
+            <button type="button" class="btn-sm stage-insert-below" title="Add Stage Below">+ Stage</button>
+            <button type="button" class="btn-icon stage-del" title="Remove Stage">
+               <svg xmlns="http://www.w3.org/2000/svg" height="20" viewBox="0 -960 960 960" width="20" fill="#ef4444"><path d="M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520ZM360-280h80v-360h-80v360Zm160 0h80v-360h-80v360ZM280-720v520-520Z"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="editor-sub-list">
+          ${subsHtml}
+          <button type="button" class="btn-sm sub-add">+ Sub-stage</button>
+        </div>
+      `;
+      return div;
+    }
+
+    // ---------- STAGE PLAN EDITOR ----------
     function renderStagePlanEditor(plan: any[], editor: HTMLElement | null) {
       if (!editor) return;
 
@@ -2492,117 +2613,12 @@ export default function ProjectManagerClient() {
         workingPlan = plan;
       }
 
-      editor.innerHTML = workingPlan
-        .map((st, idx) => {
-          const subs = st.subs || [];
-          const subsHtml = subs
-            .map(
-              (s: string, i: number) => `
-            <div class="editor-sub-row" data-sub-index="${i}">
-              <input class="editor-sub-name" value="${esc(s)}" placeholder="Sub-stage name">
-              <button type="button" class="btn-icon sub-del" title="Remove sub-stage">
-                <svg xmlns="http://www.w3.org/2000/svg" height="18" viewBox="0 -960 960 960" width="18" fill="#ef4444"><path d="M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520ZM360-280h80v-360h-80v360Zm160 0h80v-360h-80v360ZM280-720v520-520Z"/></svg>
-              </button>
-            </div>
-          `,
-            )
-            .join('');
+      editor.innerHTML = '';
 
-          return `
-          <div class="editor-stage-card" data-index="${idx}">
-            <div class="editor-stage-header">
-              <button type="button" class="editor-toggle-btn" title="Toggle">
-                <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 -960 960 960" width="24" fill="#64748b"><path d="M480-345 240-585l56-56 184 184 184-184 56 56-240 240Z"/></svg>
-              </button>
-              <input class="editor-stage-name" value="${esc(st.stage)}" placeholder="Stage name">
-              <div class="editor-actions">
-                <button type="button" class="btn-sm stage-insert-below" title="Add Stage Below">+ Stage</button>
-                <button type="button" class="btn-icon stage-del" title="Remove Stage">
-                   <svg xmlns="http://www.w3.org/2000/svg" height="20" viewBox="0 -960 960 960" width="20" fill="#ef4444"><path d="M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520ZM360-280h80v-360h-80v360Zm160 0h80v-360h-80v360ZM280-720v520-520Z"/></svg>
-                </button>
-              </div>
-            </div>
-            <div class="editor-sub-list">
-              ${subsHtml}
-              <button type="button" class="btn-sm sub-add" style="align-self:flex-start; margin-left:36px;">+ Sub-stage</button>
-            </div>
-          </div>
-        `;
-        })
-        .join('');
-
-      function wireStageRow(row: HTMLElement) {
-        const subList = row.querySelector<HTMLElement>('.editor-sub-list');
-        const subAdd = row.querySelector<HTMLElement>('.sub-add');
-        const stageDel = row.querySelector<HTMLElement>('.stage-del');
-        const insertBelow = row.querySelector<HTMLElement>('.stage-insert-below');
-        const toggleBtn = row.querySelector<HTMLElement>('.editor-toggle-btn');
-
-        toggleBtn && toggleBtn.addEventListener('click', () => {
-          if (subList) {
-            subList.classList.toggle('hidden');
-            toggleBtn.classList.toggle('collapsed');
-          }
-        });
-
-        subAdd &&
-          subAdd.addEventListener('click', () => {
-            if (!subList) return;
-            const div = document.createElement('div');
-            div.className = 'editor-sub-row';
-            div.innerHTML = `
-          <input class="editor-sub-name" placeholder="Sub-stage name">
-          <button type="button" class="btn-icon sub-del" title="Remove sub-stage">
-            <svg xmlns="http://www.w3.org/2000/svg" height="18" viewBox="0 -960 960 960" width="18" fill="#ef4444"><path d="M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520ZM360-280h80v-360h-80v360Zm160 0h80v-360h-80v360ZM280-720v520-520Z"/></svg>
-          </button>
-        `;
-            subList.insertBefore(div, subAdd);
-            const delBtn = div.querySelector<HTMLElement>('.sub-del');
-            delBtn &&
-              delBtn.addEventListener('click', () => {
-                div.remove();
-              });
-          });
-
-        subList &&
-          subList.querySelectorAll<HTMLElement>('.sub-del').forEach((btn) => {
-            btn.addEventListener('click', () => {
-              const parent = btn.closest('.editor-sub-row');
-              parent && parent.remove();
-            });
-          });
-
-        stageDel &&
-          stageDel.addEventListener('click', () => {
-            row.remove();
-          });
-
-        insertBelow &&
-          insertBelow.addEventListener('click', () => {
-            const newRow = document.createElement('div');
-            newRow.className = 'editor-stage-card';
-            newRow.innerHTML = `
-            <div class="editor-stage-header">
-              <button type="button" class="editor-toggle-btn" title="Toggle">
-                <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 -960 960 960" width="24" fill="#64748b"><path d="M480-345 240-585l56-56 184 184 184-184 56 56-240 240Z"/></svg>
-              </button>
-              <input class="editor-stage-name" placeholder="Stage name">
-              <div class="editor-actions">
-                <button type="button" class="btn-sm stage-insert-below" title="Add Stage Below">+ Stage</button>
-                <button type="button" class="btn-icon stage-del" title="Remove Stage">
-                   <svg xmlns="http://www.w3.org/2000/svg" height="20" viewBox="0 -960 960 960" width="20" fill="#ef4444"><path d="M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520ZM360-280h80v-360h-80v360Zm160 0h80v-360h-80v360ZM280-720v520-520Z"/></svg>
-              </div>
-            </div>
-            <div class="editor-sub-list">
-              <button type="button" class="btn-sm sub-add" style="align-self:flex-start; margin-left:36px;">+ Sub-stage</button>
-            </div>
-        `;
-            row.insertAdjacentElement('afterend', newRow);
-            wireStageRow(newRow);
-          });
-      }
-
-      editor.querySelectorAll<HTMLElement>('.editor-stage-card').forEach((row) => {
+      // Create rows
+      workingPlan.forEach((st) => {
+        const row = createStageRowDOM(st.stage, st.subs || []);
+        editor.appendChild(row);
         wireStageRow(row);
       });
     }
@@ -2772,116 +2788,14 @@ export default function ProjectManagerClient() {
           stagePlanEditor.innerHTML = '';
         }
 
-        const div = document.createElement('div');
-        div.className = 'editor-stage-card';
-        div.innerHTML = `
-            <div class="editor-stage-header">
-              <button type="button" class="editor-toggle-btn" title="Toggle">
-                <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 -960 960 960" width="24" fill="#64748b"><path d="M480-345 240-585l56-56 184 184 184-184 56 56-240 240Z"/></svg>
-              </button>
-              <input class="editor-stage-name" placeholder="Stage name">
-              <div class="editor-actions">
-                <button type="button" class="btn-sm stage-insert-below" title="Add Stage Below">+ Stage</button>
-                <button type="button" class="btn-icon stage-del" title="Remove Stage">
-                   <svg xmlns="http://www.w3.org/2000/svg" height="20" viewBox="0 -960 960 960" width="20" fill="#ef4444"><path d="M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520ZM360-280h80v-360h-80v360Zm160 0h80v-360h-80v360ZM280-720v520-520Z"/></svg>
-              </div>
-            </div>
-            <div class="editor-sub-list">
-              <button type="button" class="btn-sm sub-add" style="align-self:flex-start; margin-left:36px;">+ Sub-stage</button>
-            </div>
-    `;
+        // Use the helpers!
+        const div = createStageRowDOM();
         stagePlanEditor.appendChild(div);
+        wireStageRow(div);
 
-        // We need to wire this specific row manually since we can't easily access wireStageRow from here
-        // Actually, we can just copy the logic or expose wireStageRow.
-        // For now, let's just duplicate the wiring logic briefly or better yet,
-        // since renderStagePlanEditor defines wireStageRow internally, we can't access it.
-        // I will refactor renderStagePlanEditor to attach the wiring logic to the element itself or just inline it here.
-        // To keep it clean, I'll just inline the wiring logic for this new row here.
-
-        const row = div;
-        const subList = row.querySelector<HTMLElement>('.editor-sub-list');
-        const subAdd = row.querySelector<HTMLElement>('.sub-add');
-        const stageDel = row.querySelector<HTMLElement>('.stage-del');
-        const insertBelow = row.querySelector<HTMLElement>('.stage-insert-below');
-        const toggleBtn = row.querySelector<HTMLElement>('.editor-toggle-btn');
-
-        toggleBtn && toggleBtn.addEventListener('click', () => {
-          if (subList) {
-            subList.classList.toggle('hidden');
-            toggleBtn.classList.toggle('collapsed');
-          }
-        });
-
-        subAdd &&
-          subAdd.addEventListener('click', () => {
-            if (!subList) return;
-            const sdiv = document.createElement('div');
-            sdiv.className = 'editor-sub-row';
-            sdiv.innerHTML = `
-        <input class="editor-sub-name" placeholder="Sub-stage name">
-        <button type="button" class="btn-icon sub-del" title="Remove sub-stage">
-            <svg xmlns="http://www.w3.org/2000/svg" height="18" viewBox="0 -960 960 960" width="18" fill="#ef4444"><path d="M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520ZM360-280h80v-360h-80v360Zm160 0h80v-360h-80v360ZM280-720v520-520Z"/></svg>
-        </button>
-      `;
-            subList.insertBefore(sdiv, subAdd);
-            const delBtn = sdiv.querySelector<HTMLElement>('.sub-del');
-            delBtn && delBtn.addEventListener('click', () => sdiv.remove());
-          });
-
-        stageDel &&
-          stageDel.addEventListener('click', () => {
-            row.remove();
-          });
-
-        // Insert below logic is tricky here because we are outside the main loop,
-        // but it should work if we just append after.
-        insertBelow &&
-          insertBelow.addEventListener('click', () => {
-            // ... (Same logic as above, essentially recursive)
-            // For simplicity, let's just trigger the main add button if we can,
-            // or just copy the creation logic.
-            // Since this is getting complex to duplicate, let's just append a new one at the end
-            // or insert after.
-            const newRow = document.createElement('div');
-            newRow.className = 'editor-stage-card';
-            newRow.innerHTML = div.innerHTML; // Clone structure
-            // We need to re-wire the new row.
-            // This duplication is messy.
-            // BETTER APPROACH: Move the wiring logic to a helper function outside renderStagePlanEditor
-            // But I can't easily move it out in this tool call without replacing more code.
-            // I will just implement the basic wiring here.
-            row.insertAdjacentElement('afterend', newRow);
-
-            // Re-wire newRow
-            const nSubList = newRow.querySelector<HTMLElement>('.editor-sub-list');
-            const nSubAdd = newRow.querySelector<HTMLElement>('.sub-add');
-            const nStageDel = newRow.querySelector<HTMLElement>('.stage-del');
-            const nToggle = newRow.querySelector<HTMLElement>('.editor-toggle-btn');
-
-            nToggle && nToggle.addEventListener('click', () => {
-              if (nSubList) {
-                nSubList.classList.toggle('hidden');
-                nToggle.classList.toggle('collapsed');
-              }
-            });
-
-            nSubAdd && nSubAdd.addEventListener('click', () => {
-              if (!nSubList) return;
-              const sdiv = document.createElement('div');
-              sdiv.className = 'editor-sub-row';
-              sdiv.innerHTML = `
-                    <input class="editor-sub-name" placeholder="Sub-stage name">
-                    <button type="button" class="btn-icon sub-del" title="Remove sub-stage">
-                        <svg xmlns="http://www.w3.org/2000/svg" height="18" viewBox="0 -960 960 960" width="18" fill="#ef4444"><path d="M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520ZM360-280h80v-360h-80v360Zm160 0h80v-360h-80v360ZM280-720v520-520Z"/></svg>
-                    </button>
-                `;
-              nSubList.insertBefore(sdiv, nSubAdd);
-              sdiv.querySelector('.sub-del')?.addEventListener('click', () => sdiv.remove());
-            });
-
-            nStageDel && nStageDel.addEventListener('click', () => newRow.remove());
-          });
+        // Focus the input
+        const input = div.querySelector<HTMLElement>('.editor-stage-name');
+        if (input) input.focus();
       });
 
     projOK &&
