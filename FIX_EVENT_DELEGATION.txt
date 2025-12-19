@@ -1,0 +1,34 @@
+// INSTRUCTIONS FOR FIXING ASSIGN/MODIFY TASK BUTTONS
+// Replace lines 3809-3829 in ProjectManagerClient.tsx with this code:
+
+      // Add event delegation for sub-assign buttons  
+      const stagesBox = el('stagesBox');
+      if (stagesBox) {
+        // Remove old listener if it exists
+        if ((stagesBox as any)._assignClickHandler) {
+          stagesBox.removeEventListener('click', (stagesBox as any)._assignClickHandler);
+        }
+        
+        const clickHandler = async (ev: Event) => {
+          const target = ev.target as HTMLElement;
+          console.log('[ASSIGN-DEBUG] Clicked element:', target?.tagName, target?.className);
+          
+          if (!target || !target.classList.contains('sub-assign')) {
+            console.log('[ASSIGN-DEBUG] Not a sub-assign button, ignoring');
+            return;
+          }
+          
+          ev.stopPropagation();
+          const stageName = target.getAttribute('data-stage') || '';
+          const subName = target.getAttribute('data-sub') || '';
+          const taskId = target.getAttribute('data-task-id') || '';
+          
+          console.log('[ASSIGN-DEBUG] Opening modal for:', { stageName, subName, taskId });
+          await openSubstageAssign(stageName, subName, taskId);
+        };
+        
+        (stagesBox as any)._assignClickHandler = clickHandler;
+        stagesBox.addEventListener('click', clickHandler);
+        console.log('[ASSIGN-DEBUG] Event listener attached to stagesBox');
+      }
+    }

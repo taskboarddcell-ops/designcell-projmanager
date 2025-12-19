@@ -1454,25 +1454,41 @@ export default function ProjectManagerClient() {
       const confirmed = confirm(`Are you sure you want to delete user "${userName}" (${userId})?\n\nThis action cannot be undone.`);
       if (!confirmed) return;
 
+      console.log('[DELETE-USER] Attempting to delete:', { userId, userName });
+
       try {
-        const { error } = await supabase
+        // Use .select() to return deleted rows for verification
+        const { data: deletedRows, error } = await supabase
           .from('users')
           .delete()
-          .eq('staff_id', userId);
+          .eq('staff_id', userId)
+          .select();
+
+        console.log('[DELETE-USER] Delete result:', { deletedRows, error });
 
         if (error) {
-          console.error('Failed to delete user', error);
+          console.error('[DELETE-USER] Error:', error);
           const errorMsg = error.message || error.details || 'Failed to delete user';
           toast(`Delete failed: ${errorMsg}`);
-          alert(`Could not delete user.\n\nError: ${errorMsg}\n\nThis may be due to:\n- Row-Level Security policies\n- Foreign key constraints (user has related data)\n- Insufficient permissions`);
+          alert(`Could not delete user.\n\nError: ${errorMsg}\n\nLikely causes:\n1. Row-Level Security policy blocking deletion\n2. Foreign key constraints\n3. Insufficient permissions\n\nCheck: Supabase Dashboard → Database → users table → Policies`);
           return;
         }
 
+        if (!deletedRows || deletedRows.length === 0) {
+          console.warn('[DELETE-USER] No rows deleted - RLS policy likely blocking');
+          toast('Delete sent but no rows affected');
+          alert('User was NOT deleted from database.\n\nThis indicates a Row-Level Security (RLS) policy is blocking the deletion.\n\nSolution:\n1. Go to Supabase Dashboard\n2. Navigate to Database → users table → Policies\n3. Add a DELETE policy for Admin users');
+          return;
+        }
+
+        console.log('[DELETE-USER] Successfully deleted user:', deletedRows[0]);
         toast('User deleted successfully');
+
+        // Force fresh reload from database
         await loadAllUsers();
       } catch (err) {
-        console.error('Exception deleting user', err);
-        toast('Failed to delete user');
+        console.error('[DELETE-USER] Exception:', err);
+        toast(`Exception: ${err}`);
       }
     }
 
@@ -3641,11 +3657,34 @@ export default function ProjectManagerClient() {
         await loadDataAfterLogin();
       });
 
-    // ---------- PROJECT STRUCTURE TAB ----------
+    //  ---------- PROJECT STRUCTURE TAB ----------
     const stagesBox = el('stagesBox');
     const layoutActions = el('layoutActions');
     const btnEditLayout = el('btnEditLayout');
     const btnBulkAssign = el('btnBulkAssign');
+
+    // Load users for a project and cache them
+    async function loadProjectUsers(projectId: string) {
+      try {
+        console.log('[loadProjectUsers] Loading users for project:', projectId);
+        const { data: users, error } = await supabase
+          .from('users')
+          .select('*')
+          .order('name', { ascending: true });
+
+        if (error) {
+          console.error('[loadProjectUsers] Error loading users:', error);
+          projectUsersCache[projectId] = [];
+          return;
+        }
+
+        projectUsersCache[projectId] = users || [];
+        console.log('[loadProjectUsers] Loaded', users?.length || 0, 'users for project', projectId);
+      } catch (err) {
+        console.error('[loadProjectUsers] Exception:', err);
+        projectUsersCache[projectId] = [];
+      }
+    }
 
     // Per-substage assign UI (uses projectUsersCache)
     function wireSubstageAssignUI(proj: any) {
