@@ -4018,7 +4018,7 @@ export default function ProjectManagerClient() {
         .from('task_status_log')
         .select('*')
         .eq('task_id', task.id)
-        .order('changed_at', { ascending: false });
+        .order('changed_at', { ascending: true });
 
       if (error) {
         console.error('Load history error', error);
@@ -4040,6 +4040,7 @@ export default function ProjectManagerClient() {
           <div class="small muted">${esc(creationTs)} — ${esc(creator)}</div>
           <div><strong>Task Assigned</strong> to ${esc(assignedTo)}</div>
         </div>
+        <div style="text-align:center; color:#999; margin:8px 0; font-size:18px;">↓</div>
       `;
 
       if (!data || data.length === 0) {
@@ -4067,7 +4068,7 @@ export default function ProjectManagerClient() {
       });
 
       const logHtml = uniqueData
-        .map((row: any) => {
+        .map((row: any, index: number) => {
           const ts = row.changed_at
             ? new Date(row.changed_at).toLocaleString()
             : '';
@@ -4075,6 +4076,11 @@ export default function ProjectManagerClient() {
           const from = row.from_status || '-';
           const to = row.to_status || '-';
           const note = row.note || '';
+
+          // Add flow arrow between entries (except after last one)
+          const flowArrow = index < uniqueData.length - 1
+            ? '<div style="text-align:center; color:#999; margin:8px 0; font-size:18px;">↓</div>'
+            : '';
 
           return `
           <div class="history-item">
@@ -4087,6 +4093,7 @@ export default function ProjectManagerClient() {
               : ''
             }
           </div>
+          ${flowArrow}
         `;
         })
         .join('');
