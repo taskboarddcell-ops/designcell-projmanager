@@ -1368,11 +1368,10 @@ export default function ProjectManagerClient() {
 
       toast('Status updated');
 
-      // Re-render Kanban board immediately
+      // Re-render Kanban board and Task List immediately
       renderKanban();
-
-      // Then refresh all data from database
-      await loadDataAfterLogin();
+      renderTasks();
+      updateKanbanCounts();
     }
 
     // ---------- BULK TASK MODAL ----------
@@ -2307,6 +2306,10 @@ export default function ProjectManagerClient() {
 
     // ---------- ASSIGNEE FILTER OPTIONS ----------
     function refreshAssigneeFilters() {
+      // Capture current values
+      const currentFilterVal = filterAssignee ? filterAssignee.value : '';
+      const currentKbFilterVal = kbFilterAssignee ? kbFilterAssignee.value : '';
+
       const names = new Set<string>();
       tasks.forEach((t) => {
         if (!userCanSeeTask(t)) return;
@@ -2321,8 +2324,22 @@ export default function ProjectManagerClient() {
         sorted.map((nm) => `<option value="${esc(nm)}">${esc(nm)}</option>`),
       );
 
-      if (filterAssignee) filterAssignee.innerHTML = options.join('');
-      if (kbFilterAssignee) kbFilterAssignee.innerHTML = options.join('');
+      const html = options.join('');
+
+      if (filterAssignee) {
+        filterAssignee.innerHTML = html;
+        // Restore value if it exists in the new options
+        if (currentFilterVal && (currentFilterVal === '' || names.has(currentFilterVal))) {
+          filterAssignee.value = currentFilterVal;
+        }
+      }
+      if (kbFilterAssignee) {
+        kbFilterAssignee.innerHTML = html;
+        // Restore value if it exists in the new options
+        if (currentKbFilterVal && (currentKbFilterVal === '' || names.has(currentKbFilterVal))) {
+          kbFilterAssignee.value = currentKbFilterVal;
+        }
+      }
     }
 
     // ---------- RENDER TASK TABLE ----------
@@ -2667,7 +2684,7 @@ export default function ProjectManagerClient() {
     updateMobileUI(); // Initial call
 
     // ---------- KANBAN IMPROVEMENTS ---------- 
-    const updateKanbanCounts = () => {
+    function updateKanbanCounts() {
       const countPending = el('countPending');
       const countProgress = el('countProgress');
       const countDone = el('countDone');
@@ -4206,62 +4223,75 @@ export default function ProjectManagerClient() {
       stCancel.addEventListener('click', () => hideModal(statusModal));
     stOK &&
       stOK.addEventListener('click', async () => {
-        if (!selectedTask || !stSel) return;
+        if ((stOK as HTMLButtonElement).disabled) return;
+        (stOK as HTMLButtonElement).disabled = true;
 
-        let canUpdate = false;
-        if (isAdmin()) canUpdate = true;
-        else if (selectedTask.created_by_id === currentUser?.staff_id) canUpdate = true;
-        else if (isAssignee(selectedTask.assignee_ids || [])) canUpdate = true;
-        else if (selectedTask.project_id && isProjectLeadFor(selectedTask.project_id)) canUpdate = true;
+        try {
+          let canUpdate = false;
+          if (isAdmin()) canUpdate = true;
+          else if (selectedTask.created_by_id === currentUser?.staff_id) canUpdate = true;
+          else if (isAssignee(selectedTask.assignee_ids || [])) canUpdate = true;
+          else if (selectedTask.project_id && isProjectLeadFor(selectedTask.project_id)) canUpdate = true;
 
-        if (!canUpdate) {
-          toast('Only assignees, leads, or admins can update status');
-          return;
+          if (!canUpdate) {
+            toast('Only assignees, leads, or admins can update status');
+            return;
+          }
+
+          const newStatus = stSel.value || 'Pending';
+          const note = stNote ? stNote.value.trim() : '';
+          const prevStatus = selectedTask.status || 'Pending';
+
+          const { error } = await supabase
+            .from('tasks')
+            .update({
+              status: newStatus,
+              current_status: note || null,
+            })
+            .eq('id', selectedTask.id);
+
+          if (error) {
+            console.error('Status update error', error);
+            toast('Failed to update status');
+            return;
+          }
+
+          await supabase.from('task_status_log').insert([
+            {
+              task_id: selectedTask.id,
+              action: 'status_change',
+              from_status: prevStatus,
+              to_status: newStatus,
+              note: note || null,
+              changed_by_id: currentUser ? currentUser.staff_id : null,
+              changed_by_name: currentUser ? currentUser.name : null,
+            },
+          ]);
+
+          // Notify admins and project leads
+          if (currentUser) {
+            await handleTaskStatusChange(
+              selectedTask,
+              prevStatus,
+              newStatus,
+              currentUser.name || currentUser.staff_id
+            );
+          }
+
+          // Optimistic update
+          selectedTask.status = newStatus;
+          if (note) selectedTask.current_status = note;
+
+          hideModal(statusModal);
+          toast('Status updated');
+
+          renderTasks();
+          renderKanban();
+          updateKanbanCounts();
+
+        } finally {
+          (stOK as HTMLButtonElement).disabled = false;
         }
-
-        const newStatus = stSel.value || 'Pending';
-        const note = stNote ? stNote.value.trim() : '';
-        const prevStatus = selectedTask.status || 'Pending';
-
-        const { error } = await supabase
-          .from('tasks')
-          .update({
-            status: newStatus,
-            current_status: note || null,
-          })
-          .eq('id', selectedTask.id);
-
-        if (error) {
-          console.error('Status update error', error);
-          toast('Failed to update status');
-          return;
-        }
-
-        await supabase.from('task_status_log').insert([
-          {
-            task_id: selectedTask.id,
-            action: 'status_change',
-            from_status: prevStatus,
-            to_status: newStatus,
-            note: note || null,
-            changed_by_id: currentUser ? currentUser.staff_id : null,
-            changed_by_name: currentUser ? currentUser.name : null,
-          },
-        ]);
-
-        // Notify admins and project leads
-        if (currentUser) {
-          await handleTaskStatusChange(
-            selectedTask,
-            prevStatus,
-            newStatus,
-            currentUser.name || currentUser.staff_id
-          );
-        }
-
-        hideModal(statusModal);
-        toast('Status updated');
-        await loadDataAfterLogin();
       });
 
     //  ---------- PROJECT STRUCTURE TAB ----------
