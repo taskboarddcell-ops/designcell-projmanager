@@ -1320,17 +1320,32 @@ export default function ProjectManagerClient() {
       });
 
     // ---------- KANBAN STATUS CHANGE ----------
+    const kanbanUpdatingTasks = new Set<string>(); // Prevent double updates
+
     async function changeTaskStatusFromKanban(taskId: string, newStatus: string) {
+      // Prevent concurrent updates to same task
+      if (kanbanUpdatingTasks.has(taskId)) {
+        console.log('Task update already in progress:', taskId);
+        return;
+      }
+
       const task = tasks.find((t) => String(t.id) === String(taskId));
       if (!task) return;
 
+      // Skip if status is the same
+      if (task.status === newStatus) return;
+
+      kanbanUpdatingTasks.add(taskId);
+
       if (!currentUser) {
         toast('Please login first');
+        kanbanUpdatingTasks.delete(taskId);
         return;
       }
 
       if (!isAssignee(task.assignee_ids)) {
         toast('Only assignees can move this task');
+        kanbanUpdatingTasks.delete(taskId);
         return;
       }
 
@@ -1344,6 +1359,7 @@ export default function ProjectManagerClient() {
       if (error) {
         console.error('Kanban status update error', error);
         toast('Failed to update status');
+        kanbanUpdatingTasks.delete(taskId);
         return;
       }
 
@@ -1375,6 +1391,9 @@ export default function ProjectManagerClient() {
       renderKanban();
       renderTasks();
       updateKanbanCounts();
+
+      // Release the lock
+      kanbanUpdatingTasks.delete(taskId);
     }
 
     // ---------- BULK TASK MODAL ----------
@@ -2543,6 +2562,11 @@ export default function ProjectManagerClient() {
         card.addEventListener('dragstart', (ev) => {
           ev.dataTransfer?.setData('text/plain', String(t.id));
           if (ev.dataTransfer) ev.dataTransfer.effectAllowed = 'move';
+          card.classList.add('dragging');
+        });
+
+        card.addEventListener('dragend', () => {
+          card.classList.remove('dragging');
         });
 
         // Touch support for mobile drag and drop
