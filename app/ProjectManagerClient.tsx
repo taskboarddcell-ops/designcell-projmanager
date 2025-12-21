@@ -4232,7 +4232,8 @@ export default function ProjectManagerClient() {
               (c) => c.getAttribute('data-name') || c.value,
             );
 
-            if (!assignee_ids.length) {
+            // Only require assignees for NEW tasks, allow unassigning on updates
+            if (!assignee_ids.length && !selectedExistingTask) {
               toast('Select at least one assignee');
               return;
             }
