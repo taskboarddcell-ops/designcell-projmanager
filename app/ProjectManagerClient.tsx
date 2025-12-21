@@ -2429,9 +2429,7 @@ export default function ProjectManagerClient() {
           <td>${esc(t.priority || '')}</td>
           <td>${esc(t.description || '')}</td>
           <td style="text-align:right; display:flex; gap:4px; justify-content:flex-end; flex-wrap:wrap;">
-            <span class="small muted" style="margin-right:8px">${esc(
-              t.status || 'Pending',
-            )}</span>
+
             <button class="btn-sm act-status" data-id="${esc(t.id)}">Status</button>
             <button class="btn-sm act-reschedule" data-id="${esc(
               t.id,
