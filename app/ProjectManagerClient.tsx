@@ -953,9 +953,8 @@ export default function ProjectManagerClient() {
 
     const canEditProjectLayout = (proj: any) => {
       if (!currentUser || !proj) return false;
-      if (isAdmin()) return true;
-      const leads = proj.lead_ids || [];
-      return leads.includes(currentUser.staff_id);
+      // Only admins can edit project layout
+      return isAdmin();
     };
 
     // ---------- PROJECT STATUS DROPDOWN (TOP BAR) ----------
@@ -4805,7 +4804,7 @@ export default function ProjectManagerClient() {
           return;
         }
         if (!canEditProjectLayout(proj)) {
-          toast('Only leads or Admin can edit layout');
+          toast('Only admins can edit project layout');
           return;
         }
 
