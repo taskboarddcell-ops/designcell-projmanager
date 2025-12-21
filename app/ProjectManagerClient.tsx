@@ -1094,6 +1094,7 @@ export default function ProjectManagerClient() {
       const { data: users, error } = await supabase
         .from('users')
         .select('*')
+        .neq('status', 'deactivated') // Exclude deactivated users
         .order('name', { ascending: true });
 
       if (error) {
@@ -1906,6 +1907,7 @@ export default function ProjectManagerClient() {
           const { data: users, error } = await supabase
             .from('users')
             .select('staff_id, name')
+            .neq('status', 'deactivated') // Exclude deactivated users
             .order('name', { ascending: true });
 
           if (error) {
@@ -3255,6 +3257,7 @@ export default function ProjectManagerClient() {
         const { data: users, error } = await supabase
           .from('users')
           .select('*')
+          .neq('status', 'deactivated') // Exclude deactivated users
           .order('name', { ascending: true });
 
         if (error) {
@@ -3939,6 +3942,7 @@ export default function ProjectManagerClient() {
         const { data: users, error } = await supabase
           .from('users')
           .select('*')
+          .neq('status', 'deactivated') // Exclude deactivated users
           .order('name', { ascending: true });
 
         if (error) {
