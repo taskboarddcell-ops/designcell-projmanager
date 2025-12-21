@@ -3128,7 +3128,19 @@ export default function ProjectManagerClient() {
 
             if (error) {
               console.error('Create project error', error);
-              toast('Failed to create project');
+              console.error('Error details:', {
+                message: error.message,
+                details: error.details,
+                hint: error.hint,
+                code: error.code
+              });
+
+              // Check for duplicate name error
+              if (error.code === '23505' || error.message?.includes('duplicate') || error.message?.includes('unique')) {
+                toast('A project with this name already exists. Please choose a different name.');
+              } else {
+                toast(`Failed to create project: ${error.message || 'Unknown error'}`);
+              }
               return;
             }
 
