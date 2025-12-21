@@ -1089,7 +1089,7 @@ export default function ProjectManagerClient() {
       'Structural Drawings',
       'Electrical Drawings',
       'Sanitary Drawings',
-      'Site Development Drawings',
+      'Site Development Drawing',
       'Outsourcing',
       'Final BOQ'
     ];
