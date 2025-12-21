@@ -3307,6 +3307,7 @@ export default function ProjectManagerClient() {
         const { data: users, error } = await supabase
           .from('users')
           .select('*')
+          .neq('status', 'deactivated')
           .order('name', { ascending: true });
 
         if (error) {
@@ -4986,6 +4987,7 @@ export default function ProjectManagerClient() {
             const { data: users, error } = await supabase
               .from('users')
               .select('*')
+              .neq('status', 'deactivated')
               .order('name', { ascending: true });
 
             if (!error && users) {
