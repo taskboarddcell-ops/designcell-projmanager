@@ -1194,7 +1194,17 @@ export default function ProjectManagerClient() {
           };
         });
 
-        await supabase.from('notifications').insert(notifications);
+        // Use API route to create notifications (bypasses RLS)
+        const response = await fetch('/api/notifications/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ notifications }),
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          console.error('Create task assignment notification error:', error);
+        }
       } catch (error) {
         console.error('Create task assignment notification error:', error);
       }
@@ -1243,15 +1253,19 @@ export default function ProjectManagerClient() {
         console.log('[NOTIFICATION] Creating notifications for users:', notifyUsers);
         console.log('[NOTIFICATION] Notification data:', notifications);
 
-        const { data: insertResult, error: insertError } = await supabase
-          .from('notifications')
-          .insert(notifications)
-          .select();
+        // Use API route to create notifications (bypasses RLS)
+        const response = await fetch('/api/notifications/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ notifications }),
+        });
 
-        if (insertError) {
-          console.error('[NOTIFICATION] Insert failed:', insertError);
+        if (response.ok) {
+          const result = await response.json();
+          console.log('[NOTIFICATION] Successfully created', result.created || 0, 'notifications');
         } else {
-          console.log('[NOTIFICATION] Successfully created', insertResult?.length || 0, 'notifications');
+          const error = await response.json();
+          console.error('[NOTIFICATION] Insert failed:', error);
         }
       } catch (error) {
         console.error('Create task status notification error:', error);
