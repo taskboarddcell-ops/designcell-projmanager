@@ -4051,12 +4051,18 @@ export default function ProjectManagerClient() {
       const uniqueData = (data || []).filter((item, index, self) => {
         if (index === 0) return true;
         const prev = self[index - 1];
-        const t1 = new Date(item.changed_at).getTime();
-        const t2 = new Date(prev.changed_at).getTime();
+
+        // Round timestamps to nearest second for comparison
+        const t1 = Math.floor(new Date(item.changed_at).getTime() / 1000);
+        const t2 = Math.floor(new Date(prev.changed_at).getTime() / 1000);
+
+        // Check if this is a duplicate: same action, statuses, actor, and within same second
         const isSame = (item.action === prev.action) &&
           (item.from_status === prev.from_status) &&
           (item.to_status === prev.to_status) &&
-          (Math.abs(t1 - t2) < 2000);
+          (item.changed_by_id === prev.changed_by_id) &&
+          (Math.abs(t1 - t2) <= 1); // Within 1 second (rounded)
+
         return !isSame;
       });
 
