@@ -528,19 +528,26 @@ const staticHtml = `
     </div>
   </div>
 
-  <!-- EDIT PROJECT NAME MODAL -->
-  <div id="editProjectNameModal" class="modal">
-    <div class="mc" style="max-width:400px">
-      <h3 style="margin:0 0 12px 0">Edit Project Name</h3>
+  <!-- EDIT PROJECT INFO MODAL -->
+  <div id="editProjectInfoModal" class="modal">
+    <div class="mc" style="max-width:500px">
+      <h3 style="margin:0 0 12px 0">Edit Project Info</h3>
       
       <div style="margin-bottom:12px">
         <label class="small muted">Project Name *</label>
         <input id="editProjectNameInput" class="input" type="text" placeholder="Enter project name">
       </div>
 
+      <div style="margin-bottom:12px;">
+        <label class="small muted" style="margin-bottom:4px;display:block;">Project Leads</label>
+        <div id="editProjectLeadsBox" class="list" style="max-height:150px;overflow:auto;border:1px solid #e5e7eb;padding:6px;">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+
       <div class="right" style="margin-top:12px">
-        <button id="editProjectNameCancel" class="btn">Cancel</button>
-        <button id="editProjectNameSave" class="btn btn-primary">Save</button>
+        <button id="editProjectInfoCancel" class="btn">Cancel</button>
+        <button id="editProjectInfoSave" class="btn btn-primary">Save Changes</button>
       </div>
     </div>
   </div>
@@ -888,6 +895,7 @@ export default function ProjectManagerClient() {
 
     // Handle task status change notifications (notify leads and admins)
     async function handleTaskStatusChange(task: any, fromStatus: string, toStatus: string, changedByName: string) {
+      console.log('[NOTIFICATION] handleTaskStatusChange called:', { taskName: task?.task, fromStatus, toStatus, changedByName });
       if (!task || !task.project_id) return;
 
       try {
@@ -925,7 +933,19 @@ export default function ProjectManagerClient() {
           link_url: `/tasks/${task.id}`,
         }));
 
-        await supabase.from('notifications').insert(notifications);
+        console.log('[NOTIFICATION] Creating notifications for users:', notifyUsers);
+        console.log('[NOTIFICATION] Notification data:', notifications);
+
+        const { data: insertResult, error: insertError } = await supabase
+          .from('notifications')
+          .insert(notifications)
+          .select();
+
+        if (insertError) {
+          console.error('[NOTIFICATION] Insert failed:', insertError);
+        } else {
+          console.log('[NOTIFICATION] Successfully created', insertResult?.length || 0, 'notifications');
+        }
       } catch (error) {
         console.error('Create task status notification error:', error);
       }
@@ -1392,10 +1412,17 @@ export default function ProjectManagerClient() {
 
       userManagementList.innerHTML = users.map((user) => {
         const isCurrentUser = currentUser && currentUser.staff_id === user.staff_id;
+        const isDeactivated = user.status === 'deactivated';
+        const rowStyle = isDeactivated
+          ? 'border-bottom:1px solid #e5e7eb;background:#fef2f2;opacity:0.85;'
+          : 'border-bottom:1px solid #e5e7eb;';
 
         return `
-          <tr style="border-bottom:1px solid #e5e7eb;">
-            <td style="padding:12px 10px;">${esc(user.name || 'N/A')}</td>
+          <tr style="${rowStyle}">
+            <td style="padding:12px 10px;">
+              ${esc(user.name || 'N/A')}
+              ${isDeactivated ? '<span style="font-size:11px;color:#dc2626;font-weight:600;margin-left:6px;">(deactivated)</span>' : ''}
+            </td>
             <td style="padding:12px 10px;">${esc(user.staff_id)}</td>
             <td style="padding:12px 10px;">${esc(user.access_level || 'User')}</td>
             <td style="padding:12px 10px;text-align:right;">
@@ -1414,7 +1441,7 @@ export default function ProjectManagerClient() {
                   data-user-name="${esc(user.name || user.staff_id)}"
                   style="margin-left:4px;"
                 >
-                  Delete
+                  ${isDeactivated ? 'Reactivate' : 'Deactivate'}
                 </button>
               ` : '<span class="small muted" style="margin-left:8px;">(Current User)</span>'}
             </td>
@@ -1438,10 +1465,46 @@ export default function ProjectManagerClient() {
           const userId = btn.getAttribute('data-user-id');
           const userName = btn.getAttribute('data-user-name');
           if (userId && userName) {
-            await deleteUser(userId, userName);
+            // Check if user is deactivated
+            const user = allUsers.find(u => u.staff_id === userId);
+            if (user && user.status === 'deactivated') {
+              await reactivateUser(userId, userName);
+            } else {
+              await deactivateUser(userId, userName);
+            }
           }
         });
       });
+    }
+
+    async function reactivateUser(userId: string, userName: string) {
+      if (!isAdmin()) {
+        toast('Only admins can reactivate users');
+        return;
+      }
+
+      const confirmed = confirm(`Reactivate user "${userName}" (${userId})?\\n\\nThis user will be able to log in again.`);
+      if (!confirmed) return;
+
+      try {
+        const { error } = await supabase
+          .from('users')
+          .update({ status: 'active' })
+          .eq('staff_id', userId);
+
+        if (error) {
+          console.error('[REACTIVATE-USER] Error:', error);
+          toast('Failed to reactivate user');
+          return;
+        }
+
+        toast('User reactivated successfully');
+        await loadAllUsers();
+        await loadDataAfterLogin();
+      } catch (err) {
+        console.error('[REACTIVATE-USER] Exception:', err);
+        toast(`Exception: ${err}`);
+      }
     }
 
     function openResetPasswordModal(userId: string, userName: string) {
@@ -1455,58 +1518,181 @@ export default function ProjectManagerClient() {
       showModal(resetPasswordModal);
     }
 
-    async function deleteUser(userId: string, userName: string) {
+    async function deactivateUser(userId: string, userName: string) {
       if (!isAdmin()) {
-        toast('Only admins can delete users');
+        toast('Only admins can deactivate users');
         return;
       }
 
       const confirmed = confirm(`Are you sure you want to delete user "${userName}" (${userId})?\n\nThis action cannot be undone.`);
       if (!confirmed) return;
 
-      console.log('[DELETE-USER] Attempting to delete:', { userId, userName });
+      console.log('[DEACTIVATE-USER] Attempting to deactivate:', { userId, userName });
 
       try {
-        // Step 1: Delete references in notifications table to prevent Foreign Key errors
-        const { error: notifError } = await supabase
-          .from('notifications')
-          .delete()
-          .eq('user_id', userId);
+        // Get count of open tasks assigned to this user
+        const { data: openTasks, error: taskError } = await supabase
+          .from('tasks')
+          .select('id, task, status, assignee_ids, assignees')
+          .contains('assignee_ids', [userId])
+          .not('status', 'eq', 'Complete');
 
-        if (notifError) {
-          console.warn('[DELETE-USER] Warning cleaning up notifications:', notifError);
-          // Continue anyway, as it might not be a blocker or might be empty
+        if (taskError) {
+          console.error('[DEACTIVATE-USER] Error fetching tasks:', taskError);
+          toast('Failed to check user tasks');
+          return;
         }
 
-        // Step 2: Delete the user using .select() to verify
-        const { data: deletedRows, error } = await supabase
+        const openTaskCount = openTasks?.length || 0;
+
+        let reassignAction = 'leave'; // 'leave', 'reassign', 'unassign'
+        let reassignToUserId: string | null = null;
+
+        // Show confirmation with task info
+        const message = openTaskCount > 0
+          ? `Deactivate user "${userName}" (${userId})?\\n\\n` +
+          `This user has ${openTaskCount} open task(s) assigned.\\n\\n` +
+          `What would you like to do with these tasks?\\n` +
+          `• OK = Leave tasks assigned (will show as "deactivated")\\n` +
+          `• Cancel = Don't deactivate`
+          : `Deactivate user "${userName}" (${userId})?\\n\\n` +
+          `This user has no open tasks.\\n\\n` +
+          `Deactivated users cannot log in but remain in task history.`;
+
+        const confirmed = confirm(message);
+        if (!confirmed) return;
+
+        // If there are open tasks, ask about reassignment
+        if (openTaskCount > 0) {
+          const wantReassign = confirm(
+            `Do you want to reassign the ${openTaskCount} open task(s) to another user?\\n\\n` +
+            `• OK = Choose a user to reassign tasks\\n` +
+            `• Cancel = Leave tasks assigned to ${userName} (deactivated)`
+          );
+
+          if (wantReassign) {
+            // Get active users for reassignment
+            const { data: activeUsers } = await supabase
+              .from('users')
+              .select('staff_id, name')
+              .eq('status', 'active')
+              .neq('staff_id', userId)
+              .order('name', { ascending: true });
+
+            if (activeUsers && activeUsers.length > 0) {
+              const userList = activeUsers
+                .map((u, idx) => `${idx + 1}. ${u.name} (${u.staff_id})`)
+                .join('\\n');
+
+              const choice = prompt(
+                `Select a user to reassign tasks to:\\n\\n${userList}\\n\\n` +
+                `Enter the number (1-${activeUsers.length}), or 0 to unassign:`
+              );
+
+              if (choice) {
+                const choiceNum = parseInt(choice);
+                if (choiceNum === 0) {
+                  reassignAction = 'unassign';
+                } else if (choiceNum > 0 && choiceNum <= activeUsers.length) {
+                  reassignAction = 'reassign';
+                  reassignToUserId = activeUsers[choiceNum - 1].staff_id;
+                }
+              }
+            }
+          }
+        }
+
+        // Handle task reassignment based on choice
+        if (openTasks && openTasks.length > 0) {
+          for (const task of openTasks) {
+            if (reassignAction === 'reassign' && reassignToUserId) {
+              // Reassign to new user
+              const currentIds = (task.assignee_ids || []) as string[];
+              const newIds = currentIds.filter((id: string) => id !== userId);
+              newIds.push(reassignToUserId);
+
+              await supabase
+                .from('tasks')
+                .update({
+                  assignee_ids: newIds,
+                  assignees: newIds
+                })
+                .eq('id', task.id);
+
+              // Log reassignment event
+              await supabase.from('task_events').insert({
+                task_id: task.id,
+                event_type: 'reassigned',
+                from_user_id: userId,
+                to_user_id: reassignToUserId,
+                performed_by: currentUser?.staff_id
+              });
+            } else if (reassignAction === 'unassign') {
+              // Remove user from assignment
+              const currentIds = (task.assignee_ids || []) as string[];
+              const newIds = currentIds.filter((id: string) => id !== userId);
+
+              await supabase
+                .from('tasks')
+                .update({
+                  assignee_ids: newIds,
+                  assignees: newIds
+                })
+                .eq('id', task.id);
+
+              // Log unassignment event
+              await supabase.from('task_events').insert({
+                task_id: task.id,
+                event_type: 'unassigned',
+                from_user_id: userId,
+                to_user_id: null,
+                performed_by: currentUser?.staff_id
+              });
+            }
+            // If 'leave', we don't modify the task assignments
+          }
+        }
+
+
+        // Deactivate the user (soft delete)
+        console.log('[DEACTIVATE-USER] About to update user status:', { userId, currentStatus: 'checking...' });
+
+        const { data: updateResult, error: deactivateError } = await supabase
           .from('users')
-          .delete()
+          .update({ status: 'deactivated' })
           .eq('staff_id', userId)
-          .select();
+          .select(); // Add .select() to see what was updated
 
-        console.log('[DELETE-USER] Delete result:', { deletedRows, error });
+        console.log('[DEACTIVATE-USER] Update result:', { updateResult, deactivateError });
 
-        if (error) {
-          console.error('[DELETE-USER] Error:', error);
-          const errorMsg = error.message || error.details || 'Failed to delete user';
-          toast(`Delete failed: ${errorMsg}`);
-          alert(`Could not delete user.\n\nError: ${errorMsg}\n\nLikely causes:\n1. Row-Level Security policy blocking deletion\n2. Foreign key constraints\n3. Insufficient permissions\n\nCheck: Supabase Dashboard → Database → users table → Policies`);
+        if (deactivateError) {
+          console.error('[DEACTIVATE-USER] Error:', deactivateError);
+          toast(`Failed to deactivate user: ${deactivateError.message}`);
           return;
         }
 
-        if (!deletedRows || deletedRows.length === 0) {
-          console.warn('[DELETE-USER] No rows deleted - RLS policy likely blocking');
-          toast('Delete sent but no rows affected');
-          alert('User was NOT deleted from database.\n\nThis indicates a Row-Level Security (RLS) policy is blocking the deletion.\n\nSolution:\n1. Go to Supabase Dashboard\n2. Navigate to Database → users table → Policies\n3. Add a DELETE policy for Admin users');
+        if (!updateResult || updateResult.length === 0) {
+          console.error('[DEACTIVATE-USER] No rows updated - RLS policy may be blocking');
+          toast('User not deactivated - check permissions');
+          alert('User was NOT deactivated.\\n\\nPossible causes:\\n1. Row-Level Security (RLS) policy blocking UPDATE\\n2. User not found\\n3. Insufficient permissions\\n\\nCheck Supabase Dashboard → Database → users table → Policies');
           return;
         }
 
-        console.log('[DELETE-USER] Successfully deleted user:', deletedRows[0]);
-        toast('User deleted successfully');
+        console.log('[DEACTIVATE-USER] Successfully deactivated user:', userId);
+
+        const actionMsg = reassignAction === 'reassign'
+          ? ` and reassigned ${openTaskCount} task(s)`
+          : reassignAction === 'unassign'
+            ? ` and unassigned ${openTaskCount} task(s)`
+            : openTaskCount > 0
+              ? ` (${openTaskCount} task(s) remain assigned)`
+              : '';
+
+        toast(`User deactivated${actionMsg}`);
 
         // Force fresh reload from database
         await loadAllUsers();
+        await loadDataAfterLogin(); // Refresh tasks to reflect changes
       } catch (err) {
         console.error('[DELETE-USER] Exception:', err);
         toast(`Exception: ${err}`);
@@ -1659,7 +1845,7 @@ export default function ProjectManagerClient() {
             e.preventDefault();
             const projectId = editBtn.getAttribute('data-project-id');
             if (projectId) {
-              openEditProjectNameModal(projectId);
+              openEditProjectInfoModal(projectId);
             }
           });
         }
@@ -1680,16 +1866,17 @@ export default function ProjectManagerClient() {
         updateProjectStatusControl();
       });
 
-    // ---------- EDIT PROJECT NAME MODAL ----------
-    const editProjectNameModal = el('editProjectNameModal');
+    // ---------- EDIT PROJECT INFO MODAL ----------
+    const editProjectInfoModal = el('editProjectInfoModal');
     const editProjectNameInput = el('editProjectNameInput') as HTMLInputElement | null;
-    const editProjectNameCancel = el('editProjectNameCancel');
-    const editProjectNameSave = el('editProjectNameSave');
+    const editProjectLeadsBox = el('editProjectLeadsBox');
+    const editProjectInfoCancel = el('editProjectInfoCancel');
+    const editProjectInfoSave = el('editProjectInfoSave');
     let editingProjectId: string | null = null;
 
-    function openEditProjectNameModal(projectId: string) {
+    async function openEditProjectInfoModal(projectId: string) {
       if (!isAdmin()) {
-        toast('Only admins can edit project names');
+        toast('Only admins can edit project details');
         return;
       }
 
@@ -1704,88 +1891,104 @@ export default function ProjectManagerClient() {
         editProjectNameInput.value = project.name || '';
       }
 
-      showModal(editProjectNameModal);
+      // Populate leads
+      if (editProjectLeadsBox) {
+        editProjectLeadsBox.innerHTML = '<div class="small muted">Loading users...</div>';
+        try {
+          const { data: users, error } = await supabase
+            .from('users')
+            .select('staff_id, name')
+            .order('name', { ascending: true });
+
+          if (error) {
+            console.error('Load users error', error);
+            editProjectLeadsBox.innerHTML = '<div class="small error">Failed to load users</div>';
+          } else {
+            const currentLeads = new Set(project.lead_ids || []);
+            editProjectLeadsBox.innerHTML = (users || [])
+              .map((u: any) => {
+                const checked = currentLeads.has(u.staff_id) ? 'checked' : '';
+                return `
+                <label class="chk-line" style="display:flex;align-items:center;min-height:24px;margin-bottom:4px;">
+                  <input type="checkbox" class="lead-chk" value="${esc(u.staff_id)}" ${checked}>
+                  <span style="font-size:13px;margin-left:6px;">${esc(u.name || u.staff_id)}</span>
+                </label>
+                `;
+              })
+              .join('');
+          }
+        } catch (err) {
+          console.error('Populate leads error', err);
+          editProjectLeadsBox.innerHTML = '<div class="small error">Exception loading users</div>';
+        }
+      }
+
+      showModal(editProjectInfoModal);
     }
 
-    editProjectNameCancel &&
-      editProjectNameCancel.addEventListener('click', () => {
-        hideModal(editProjectNameModal);
+    editProjectInfoCancel &&
+      editProjectInfoCancel.addEventListener('click', () => {
+        hideModal(editProjectInfoModal);
         editingProjectId = null;
       });
 
-    editProjectNameSave &&
-      editProjectNameSave.addEventListener('click', async () => {
-        if (!isAdmin()) {
-          toast('Only admins can edit project names');
-          return;
-        }
+    editProjectInfoSave &&
+      editProjectInfoSave.addEventListener('click', async () => {
+        if (!editingProjectId || !editProjectNameInput) return;
 
-        if (!editingProjectId) {
-          toast('No project selected');
-          return;
-        }
-
-        const newName = (editProjectNameInput && editProjectNameInput.value.trim()) || '';
+        const newName = editProjectNameInput.value.trim();
         if (!newName) {
-          toast('Project name cannot be empty');
+          toast('Project name is required');
           return;
         }
 
-        const project = projects.find((p) => p.id === editingProjectId);
-        if (!project) {
-          toast('Project not found');
-          return;
+        // Collect selected leads
+        const leadIds: string[] = [];
+        if (editProjectLeadsBox) {
+          editProjectLeadsBox.querySelectorAll<HTMLInputElement>('.lead-chk:checked').forEach(cb => {
+            leadIds.push(cb.value);
+          });
         }
 
-        const oldName = project.name;
-
-        // Check if name is already taken by another project
-        const duplicate = projects.find(
-          (p) => p.id !== editingProjectId && p.name === newName,
-        );
-        if (duplicate) {
-          toast('A project with this name already exists');
-          return;
-        }
-
-        // Update project name in database
         const { error } = await supabase
           .from('projects')
-          .update({ name: newName })
+          .update({
+            name: newName,
+            lead_ids: leadIds,
+          })
           .eq('id', editingProjectId);
 
         if (error) {
-          console.error('Update project name error', error);
-          toast('Failed to update project name');
+          console.error('Update project error', error);
+          toast('Failed to update project');
           return;
         }
 
-        // Update tasks that reference this project by project_name
-        await supabase
-          .from('tasks')
-          .update({ project_name: newName })
-          .eq('project_id', editingProjectId);
-
-        toast('Project name updated successfully');
-
-        // Update local cache
-        project.name = newName;
-
-        // Update active project name if this was the active project
-        if (activeProjectName === oldName) {
-          activeProjectName = newName;
-          if (contextInfo) {
-            contextInfo.textContent = `Project: ${newName}`;
-          }
+        // Update local state
+        const p = projects.find((x) => x.id === editingProjectId);
+        if (p) {
+          p.name = newName;
+          p.lead_ids = leadIds;
         }
 
-        hideModal(editProjectNameModal);
+        toast('Project updated');
+        hideModal(editProjectInfoModal);
         editingProjectId = null;
 
         // Refresh UI
         buildProjectSidebar();
+        if (activeProjectName) {
+          if (p) activeProjectName = p.name;
+        }
+
+        if (contextInfo) {
+          contextInfo.textContent = activeProjectName
+            ? `Project: ${activeProjectName}`
+            : 'All Projects';
+        }
+
+        renderProjectStructure();
         renderTasks();
-        renderKanban();
       });
 
     // ---------- ASSIGNEE FILTER OPTIONS ----------
@@ -2186,7 +2389,13 @@ export default function ProjectManagerClient() {
           `/api/notifications?userId=${encodeURIComponent(currentUser.staff_id)}&limit=20`,
         );
         if (!response.ok) {
-          console.error('Failed to load notifications');
+          console.error('Failed to load notifications', {
+            status: response.status,
+            statusText: response.statusText,
+            userId: currentUser?.staff_id
+          });
+          const text = await response.text();
+          console.error('Response body:', text);
           return;
         }
 
@@ -2406,6 +2615,12 @@ export default function ProjectManagerClient() {
         const user = usersData && usersData[0];
         if (!user) {
           toast('Invalid credentials');
+          return;
+        }
+
+        // Prevent deactivated users from logging in
+        if (user.status === 'deactivated') {
+          toast('This account has been deactivated. Please contact an administrator.');
           return;
         }
 
@@ -3323,7 +3538,27 @@ export default function ProjectManagerClient() {
         }
 
         // ------------------ GENERATE DC-ID ------------------
-        const { data: nextId, error: idErr } = await supabase.rpc('get_next_dc_id');
+        // ------------------ GENERATE DC-ID ------------------
+        // Use our API route to avoid CORS/RPC issues on client
+        let nextId = null;
+        let idErr = null;
+
+        try {
+          const res = await fetch('/api/users/generate-id');
+          if (!res.ok) {
+            idErr = { message: `Fetch failed: ${res.status}` };
+          } else {
+            const json = await res.json();
+            if (json.error) {
+              idErr = json.error;
+            } else {
+              nextId = json.nextId;
+            }
+          }
+        } catch (e) {
+          idErr = e;
+        }
+
         if (idErr || !nextId) {
           console.error('get_next_dc_id error:', idErr);
           toast('Failed to generate user ID');
@@ -4069,7 +4304,14 @@ export default function ProjectManagerClient() {
 
             <!-- Project Leads -->
             <div>
-              <div class="small muted" style="text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Project Lead${leadNames.length !== 1 ? 's' : ''}</div>
+              <div class="small muted" style="text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;display:flex;align-items:center;">
+                Project Lead${leadNames.length !== 1 ? 's' : ''}
+                <button class="btn-icon-sm edit-leads-btn" data-project-id="${esc(proj.id)}" title="Edit Leads" style="border:none;background:none;cursor:pointer;margin-left:6px;padding:0;color:var(--text-muted);display:flex;align-items:center;">
+                  <svg xmlns="http://www.w3.org/2000/svg" height="14" width="14" viewBox="0 -960 960 960" fill="currentColor">
+                     <path d="M200-200h57l391-391-57-57-391 391v57Zm-80 80v-170l528-527q12-11 26.5-17t30.5-6q16 0 31 6t26 18l55 56q12 11 17.5 26t5.5 30q0 16-5.5 30.5T817-647L290-120H120Zm640-584-56-56 56 56Zm-141 85-28-29 57 57-29-28Z"/>
+                  </svg>
+                </button>
+              </div>
               <div style="font-weight:600;font-size:14px;">
                 ${leadNames.length > 0
           ? leadNames.map(name => `<div style="margin-bottom:2px;">${esc(name)}</div>`).join('')
@@ -4086,6 +4328,19 @@ export default function ProjectManagerClient() {
           </div>
         </div>
       `;
+
+      // Attach listener for the pencil icon inside this card
+      // Use setTimeout to ensure DOM is updated
+      setTimeout(() => {
+        const pencilBtn = projectInfoCard.querySelector('.edit-leads-btn');
+        if (pencilBtn) {
+          pencilBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const pid = pencilBtn.getAttribute('data-project-id');
+            if (pid) openEditProjectInfoModal(pid);
+          });
+        }
+      }, 0);
     }
 
     function renderProjectStructure() {
@@ -4099,6 +4354,10 @@ export default function ProjectManagerClient() {
       // ALL PROJECTS VIEW (status manager)
       if (isAllProjects) {
         if (layoutActions) layoutActions.style.display = 'none';
+
+        // Fix: Hide project info card when viewing All Projects
+        const projectInfoCard = el('projectInfoCard');
+        if (projectInfoCard) projectInfoCard.style.display = 'none';
 
         // Calculate years from project names
         const uniqueYears = Array.from(new Set(projects.map(p => getProjectYear(p.name)).filter(y => y !== 9999))).sort((a, b) => a - b);
