@@ -349,7 +349,7 @@ const staticHtml = `
         <div><label class="small muted">Sub-stage *</label><select id="tSub" class="select"></select></div>
       </div>
       <div class="grid3" style="margin-top:8px">
-        <div><label class="small muted">Due *</label><input id="tDue" class="input" type="date"></div>
+        <div><label class="small muted">Due *</label><input id="tDue" class="input" type="date" required></div>
         <div>
           <label class="small muted">Priority</label>
           <select id="tPriority" class="select">
@@ -492,7 +492,7 @@ const staticHtml = `
       <div class="grid3" style="margin-bottom:8px">
         <div>
           <label class="small muted">Due *</label>
-          <input id="bulkDue" class="input" type="date">
+          <input id="bulkDue" class="input" type="date" required>
         </div>
         <div>
           <label class="small muted">Priority</label>
@@ -3393,6 +3393,11 @@ export default function ProjectManagerClient() {
         }
 
         const due = tDue.value || null;
+        if (!due) {
+          toast('Due date is required');
+          return;
+        }
+
         const priority = tPriority.value || 'Medium';
 
         const checked = assigneesBox
