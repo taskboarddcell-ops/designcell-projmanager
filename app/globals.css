@@ -1399,3 +1399,40 @@ tr.low {
   font-size: 11px;
   color: #9ca3af;
 }
+
+/* Highlight flash animation for task rows */
+@keyframes highlight-flash {
+  0% {
+    background-color: transparent;
+  }
+
+  20% {
+    background-color: #fef3c7;
+  }
+
+  40% {
+    background-color: #fcd34d;
+  }
+
+  60% {
+    background-color: #fef3c7;
+  }
+
+  80% {
+    background-color: #fcd34d;
+  }
+
+  100% {
+    background-color: transparent;
+  }
+}
+
+.highlight-flash {
+  animation: highlight-flash 2s ease-in-out;
+}
+
+tr.highlight-flash {
+  animation: highlight-flash 2s ease-in-out;
+  outline: 2px solid #f59e0b;
+  outline-offset: -2px;
+}

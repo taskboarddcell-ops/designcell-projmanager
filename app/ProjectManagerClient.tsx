@@ -2829,9 +2829,48 @@ export default function ProjectManagerClient() {
                   }
                 }
 
-                if (link) {
-                  // Navigate to the link
-                  window.location.href = link;
+                // Close dropdown
+                if (notificationDropdown) {
+                  notificationDropdown.style.display = 'none';
+                }
+
+                // Handle navigation within SPA
+                if (link && link.startsWith('/tasks/')) {
+                  // Extract task ID from link like "/tasks/uuid"
+                  const taskId = link.replace('/tasks/', '');
+
+                  // Switch to Tasks tab
+                  selectTab('tasks');
+
+                  // Find and highlight the task (brief flash effect)
+                  setTimeout(() => {
+                    const taskRow = container.querySelector(`tr[data-id="${taskId}"]`);
+                    if (taskRow) {
+                      taskRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                      taskRow.classList.add('highlight-flash');
+                      setTimeout(() => taskRow.classList.remove('highlight-flash'), 2000);
+                    } else {
+                      // Task might be filtered out - clear filters and try again
+                      const filterStatusEl = el('filterStatus') as HTMLSelectElement | null;
+                      const filterSearchEl = el('filterSearch') as HTMLInputElement | null;
+
+                      if (filterStatusEl) filterStatusEl.value = '';
+                      if (filterSearchEl) filterSearchEl.value = '';
+
+                      renderTasks();
+
+                      setTimeout(() => {
+                        const retryRow = container.querySelector(`tr[data-id="${taskId}"]`);
+                        if (retryRow) {
+                          retryRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                          retryRow.classList.add('highlight-flash');
+                          setTimeout(() => retryRow.classList.remove('highlight-flash'), 2000);
+                        } else {
+                          toast('Task not found or may have been deleted');
+                        }
+                      }, 100);
+                    }
+                  }, 100);
                 }
 
                 await loadNotifications();
