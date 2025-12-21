@@ -1022,7 +1022,7 @@ export default function ProjectManagerClient() {
         return;
       }
 
-      if (!isAssignee(task)) {
+      if (!isAssignee(task.assignee_ids)) {
         toast('Only assignees can move this task');
         return;
       }
