@@ -4120,168 +4120,177 @@ export default function ProjectManagerClient() {
 
       assignBtn &&
         assignBtn.addEventListener('click', async () => {
-          if (!currentUser) {
-            toast('Please login first');
-            return;
-          }
+          // Prevent double-clicks
+          if ((assignBtn as HTMLButtonElement).disabled) return;
+          (assignBtn as HTMLButtonElement).disabled = true;
 
-          const stageName = stageSel?.value || '';
-          const subName = subSel?.value || '';
-          const dueDate = dueSel?.value || null;
-          const priority = prioritySel?.value || 'Medium';
-
-          // Validate due date
-          if (!dueDate) {
-            toast('Due date is required');
-            return;
-          }
-
-          if (!canEditProjectLayout(proj)) {
-            toast('Only project leads or admins can assign/edit tasks here');
-            return;
-          }
-
-          // --- BULK ASSIGN LOGIC ---
-          if (bulkAssignStageName) {
-            const rawPlan = proj.stage_plan || [];
-            const plan = Array.isArray(rawPlan) ? rawPlan : [];
-            const stage = plan.find((s: any) => (s.stage || s.name) === bulkAssignStageName);
-
-            if (!stage) {
-              toast('Stage not found');
+          try {
+            if (!currentUser) {
+              toast('Please login first');
               return;
             }
 
-            const subs = stage.subs || stage.sub_stages || [];
-            if (subs.length === 0) {
-              toast('No sub-stages to assign');
+            const stageName = stageSel?.value || '';
+            const subName = subSel?.value || '';
+            const dueDate = dueSel?.value || null;
+            const priority = prioritySel?.value || 'Medium';
+
+            // Validate due date
+            if (!dueDate) {
+              toast('Due date is required');
               return;
             }
 
-            const checked = assignList?.querySelectorAll<HTMLInputElement>('.asgU:checked');
-            const selectedIds: string[] = [];
-            checked?.forEach((c) => selectedIds.push(c.value));
+            if (!canEditProjectLayout(proj)) {
+              toast('Only project leads or admins can assign/edit tasks here');
+              return;
+            }
 
-            let updateCount = 0;
-            // Iterate all substages and upsert tasks
-            for (const sub of subs) {
-              const existing = tasks.find(
-                (t) =>
-                  t.project_id === proj.id &&
-                  (t.stage_id || '') === bulkAssignStageName &&
-                  (t.sub_id || '') === sub
-              );
+            // --- BULK ASSIGN LOGIC ---
+            if (bulkAssignStageName) {
+              const rawPlan = proj.stage_plan || [];
+              const plan = Array.isArray(rawPlan) ? rawPlan : [];
+              const stage = plan.find((s: any) => (s.stage || s.name) === bulkAssignStageName);
 
-              if (existing) {
-                // Update existing task
-                await supabase
-                  .from('tasks')
-                  .update({ assignee_ids: selectedIds })
-                  .eq('id', existing.id);
-                existing.assignee_ids = selectedIds;
-              } else {
-                // Create new task
-                const { data } = await supabase
-                  .from('tasks')
-                  .insert({
-                    project_id: proj.id,
-                    project_name: proj.name,
-                    stage_id: bulkAssignStageName,
-                    sub_id: sub,
-                    assignee_ids: selectedIds,
-                    assignees: selectedIds,
-                    status: 'Pending',
-                    task: `${bulkAssignStageName} - ${sub}`,
-                    due: dueDate,
-                    priority: priority,
-                    description: '',
-                    created_by_id: currentUser.staff_id,
-                    created_by_name: currentUser.name,
-                  })
-                  .select();
-
-                if (data && data[0]) tasks.push(data[0]);
+              if (!stage) {
+                toast('Stage not found');
+                return;
               }
-              updateCount++;
+
+              const subs = stage.subs || stage.sub_stages || [];
+              if (subs.length === 0) {
+                toast('No sub-stages to assign');
+                return;
+              }
+
+              const checked = assignList?.querySelectorAll<HTMLInputElement>('.asgU:checked');
+              const selectedIds: string[] = [];
+              checked?.forEach((c) => selectedIds.push(c.value));
+
+              let updateCount = 0;
+              // Iterate all substages and upsert tasks
+              for (const sub of subs) {
+                const existing = tasks.find(
+                  (t) =>
+                    t.project_id === proj.id &&
+                    (t.stage_id || '') === bulkAssignStageName &&
+                    (t.sub_id || '') === sub
+                );
+
+                if (existing) {
+                  // Update existing task
+                  await supabase
+                    .from('tasks')
+                    .update({ assignee_ids: selectedIds })
+                    .eq('id', existing.id);
+                  existing.assignee_ids = selectedIds;
+                } else {
+                  // Create new task
+                  const { data } = await supabase
+                    .from('tasks')
+                    .insert({
+                      project_id: proj.id,
+                      project_name: proj.name,
+                      stage_id: bulkAssignStageName,
+                      sub_id: sub,
+                      assignee_ids: selectedIds,
+                      assignees: selectedIds,
+                      status: 'Pending',
+                      task: `${bulkAssignStageName} - ${sub}`,
+                      due: dueDate,
+                      priority: priority,
+                      description: '',
+                      created_by_id: currentUser.staff_id,
+                      created_by_name: currentUser.name,
+                    })
+                    .select();
+
+                  if (data && data[0]) tasks.push(data[0]);
+                }
+                updateCount++;
+              }
+
+              toast(`Bulk assigned ${updateCount} tasks`);
+              panel.classList.remove('show');
+              renderProjectStructure(); // Refresh UI
+
+              // Clean up
+              bulkAssignStageName = null;
+              if (subSel) subSel.disabled = false;
+              return;
+            }
+            // --- END BULK ASSIGN ---
+
+            const chosen = assignList
+              ? Array.from(
+                assignList.querySelectorAll<HTMLInputElement>('.asgU:checked'),
+              )
+              : [];
+
+            const assignee_ids = chosen.map((c) => c.value);
+            const assignees = chosen.map(
+              (c) => c.getAttribute('data-name') || c.value,
+            );
+
+            if (!assignee_ids.length) {
+              toast('Select at least one assignee');
+              return;
             }
 
-            toast(`Bulk assigned ${updateCount} tasks`);
+            if (selectedExistingTask) {
+              const old = selectedExistingTask;
+
+              const { error } = await supabase
+                .from('tasks')
+                .update({
+                  assignee_ids,
+                  assignees,
+                })
+                .eq('id', old.id);
+
+              if (error) {
+                console.error('Update error', error);
+                toast('Failed to update task');
+                return;
+              }
+
+              toast('Task updated');
+            } else {
+              const title = `${stageName} - ${subName}`;
+
+              const { error } = await supabase.from('tasks').insert([
+                {
+                  project_id: proj.id,
+                  project_name: proj.name,
+                  stage_id: stageName,
+                  sub_id: subName,
+                  task: title,
+                  description: '',
+                  due: dueDate,
+                  priority: priority,
+                  status: 'Pending',
+                  assignee_ids,
+                  assignees,
+                  created_by_id: currentUser.staff_id,
+                  created_by_name: currentUser.name,
+                },
+              ]);
+
+              if (error) {
+                console.error('Insert error', error);
+                toast('Failed to create task');
+                return;
+              }
+
+              toast('Task created');
+            }
+
             panel.classList.remove('show');
-            renderProjectStructure(); // Refresh UI
-
-            // Clean up
-            bulkAssignStageName = null;
-            if (subSel) subSel.disabled = false;
-            return;
+            await loadDataAfterLogin();
+          } finally {
+            // Re-enable button
+            (assignBtn as HTMLButtonElement).disabled = false;
           }
-          // --- END BULK ASSIGN ---
-
-          const chosen = assignList
-            ? Array.from(
-              assignList.querySelectorAll<HTMLInputElement>('.asgU:checked'),
-            )
-            : [];
-
-          const assignee_ids = chosen.map((c) => c.value);
-          const assignees = chosen.map(
-            (c) => c.getAttribute('data-name') || c.value,
-          );
-
-          if (!assignee_ids.length) {
-            toast('Select at least one assignee');
-            return;
-          }
-
-          if (selectedExistingTask) {
-            const old = selectedExistingTask;
-
-            const { error } = await supabase
-              .from('tasks')
-              .update({
-                assignee_ids,
-                assignees,
-              })
-              .eq('id', old.id);
-
-            if (error) {
-              console.error('Update error', error);
-              toast('Failed to update task');
-              return;
-            }
-
-            toast('Task updated');
-          } else {
-            const title = `${stageName} - ${subName}`;
-
-            const { error } = await supabase.from('tasks').insert([
-              {
-                project_id: proj.id,
-                project_name: proj.name,
-                stage_id: stageName,
-                sub_id: subName,
-                task: title,
-                description: '',
-                due: dueDate,
-                priority: priority,
-                status: 'Pending',
-                assignee_ids,
-                assignees,
-                created_by_id: currentUser.staff_id,
-                created_by_name: currentUser.name,
-              },
-            ]);
-
-            if (error) {
-              console.error('Insert error', error);
-              toast('Failed to create task');
-              return;
-            }
-
-            toast('Task created');
-          }
-
-          panel.classList.remove('show');
-          await loadDataAfterLogin();
         });
 
       // Add event delegation for sub-assign buttons
