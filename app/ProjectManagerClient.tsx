@@ -4299,17 +4299,29 @@ export default function ProjectManagerClient() {
         // Use a flag to prevent duplicate listeners
         if (!(stagesBox as any)._hasAssignListener) {
           (stagesBox as any)._hasAssignListener = true;
+          let isProcessing = false; // Prevent rapid clicks
 
           stagesBox.addEventListener('click', async (ev) => {
             const target = ev.target as HTMLElement;
             if (!target || !target.classList.contains('sub-assign')) return;
 
-            ev.stopPropagation();
-            const stageName = target.getAttribute('data-stage') || '';
-            const subName = target.getAttribute('data-sub') || '';
-            const taskId = target.getAttribute('data-task-id') || '';
+            // Prevent rapid clicks
+            if (isProcessing) return;
+            isProcessing = true;
 
-            await openSubstageAssign(stageName, subName, taskId);
+            try {
+              ev.stopPropagation();
+              const stageName = target.getAttribute('data-stage') || '';
+              const subName = target.getAttribute('data-sub') || '';
+              const taskId = target.getAttribute('data-task-id') || '';
+
+              await openSubstageAssign(stageName, subName, taskId);
+            } finally {
+              // Small delay to prevent accidental double-clicks
+              setTimeout(() => {
+                isProcessing = false;
+              }, 300);
+            }
           });
         }
       }
