@@ -1082,13 +1082,16 @@ export default function ProjectManagerClient() {
     const el = (id: string) => container.querySelector<HTMLElement>(`#${id}`);
 
     const STAGE_ORDER = [
-      'PRELIMINARY',
-      'ARCHITECTURAL DRAWINGS',
-      'STRUCTURAL DRAWINGS',
-      'SANITARY DRAWINGS',
-      'ELECTRICAL DRAWINGS',
-      'SITE DEVELOPMENT DRAWING',
-      'MUNICIPAL',
+      'Preliminary',
+      'Municipal',
+      'Preliminary BOQ',
+      'Architectural Drawings',
+      'Structural Drawings',
+      'Electrical Drawings',
+      'Sanitary Drawings',
+      'Site Development Drawings',
+      'Outsourcing',
+      'Final BOQ'
     ];
 
     const STAGE_ORDER_MAP = new Map(
@@ -4640,6 +4643,31 @@ export default function ProjectManagerClient() {
       }, 0);
     }
 
+    // Sort stages according to predefined order (uses STAGE_ORDER defined above)
+    function sortStagesByOrder(stages: any[]): any[] {
+      return [...stages].sort((a, b) => {
+        const aName = (a.stage || a.name || '').trim();
+        const bName = (b.stage || b.name || '').trim();
+
+        const aIndex = STAGE_ORDER.indexOf(aName);
+        const bIndex = STAGE_ORDER.indexOf(bName);
+
+        // If both are in the order list, sort by their position
+        if (aIndex !== -1 && bIndex !== -1) {
+          return aIndex - bIndex;
+        }
+
+        // If only a is in the list, it comes first
+        if (aIndex !== -1) return -1;
+
+        // If only b is in the list, it comes first
+        if (bIndex !== -1) return 1;
+
+        // If neither is in the list, maintain original order (alphabetical)
+        return aName.localeCompare(bName);
+      });
+    }
+
     function renderProjectStructure() {
       if (!stagesBox) return;
 
@@ -4898,7 +4926,10 @@ export default function ProjectManagerClient() {
           return;
         }
 
-        const html = planArray
+        // Sort stages according to predefined order
+        const sortedPlan = sortStagesByOrder(planArray);
+
+        const html = sortedPlan
           .map((s: any) => {
             const stName = s.stage || s.name || 'Stage';
             const subs = s.subs || s.sub_stages || [];
@@ -5030,7 +5061,10 @@ export default function ProjectManagerClient() {
           subs: s.subs || s.sub_stages || [],
         }));
 
-        renderStagePlanEditor(normalizedPlan, stagesBox);
+        // Sort stages in edit mode as well
+        const sortedNormalizedPlan = sortStagesByOrder(normalizedPlan);
+
+        renderStagePlanEditor(sortedNormalizedPlan, stagesBox);
         if (btnEditLayout) btnEditLayout.textContent = '💾 Save Layout';
 
       }
