@@ -3286,14 +3286,8 @@ export default function ProjectManagerClient() {
           subs,
         }));
 
-        plan.sort((a, b) => {
-          const ua = (a.stage || '').toUpperCase();
-          const ub = (b.stage || '').toUpperCase();
-          const ia = STAGE_ORDER_MAP.has(ua) ? STAGE_ORDER_MAP.get(ua)! : 999;
-          const ib = STAGE_ORDER_MAP.has(ub) ? STAGE_ORDER_MAP.get(ub)! : 999;
-          if (ia !== ib) return ia - ib;
-          return ua.localeCompare(ub);
-        });
+        // Use canonical sort
+        plan = sortStagesByOrder(plan);
 
         renderStagePlanEditor(plan, editor);
       } catch (e) {
@@ -4644,27 +4638,18 @@ export default function ProjectManagerClient() {
     }
 
     // Sort stages according to predefined order (uses STAGE_ORDER defined above)
+    // Sort stages according to predefined order (uses STAGE_ORDER defined above)
     function sortStagesByOrder(stages: any[]): any[] {
       return [...stages].sort((a, b) => {
-        const aName = (a.stage || a.name || '').trim();
-        const bName = (b.stage || b.name || '').trim();
+        const aName = (a.stage || a.name || '').trim().toUpperCase();
+        const bName = (b.stage || b.name || '').trim().toUpperCase();
 
-        const aIndex = STAGE_ORDER.indexOf(aName);
-        const bIndex = STAGE_ORDER.indexOf(bName);
+        const aIndex = STAGE_ORDER_MAP.has(aName) ? STAGE_ORDER_MAP.get(aName)! : 999;
+        const bIndex = STAGE_ORDER_MAP.has(bName) ? STAGE_ORDER_MAP.get(bName)! : 999;
 
-        // If both are in the order list, sort by their position
-        if (aIndex !== -1 && bIndex !== -1) {
-          return aIndex - bIndex;
-        }
+        if (aIndex !== bIndex) return aIndex - bIndex;
 
-        // If only a is in the list, it comes first
-        if (aIndex !== -1) return -1;
-
-        // If only b is in the list, it comes first
-        if (bIndex !== -1) return 1;
-
-        // If neither is in the list, maintain original order (alphabetical)
-        return aName.localeCompare(bName);
+        return (a.stage || a.name || '').localeCompare(b.stage || b.name || '');
       });
     }
 
