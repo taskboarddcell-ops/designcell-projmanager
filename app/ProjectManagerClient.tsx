@@ -619,6 +619,21 @@ const staticHtml = `
         </div>
       </div>
 
+      <div class="grid2" style="margin-bottom:8px">
+        <div>
+          <label class="small muted">Due *</label>
+          <input id="stAssignDue" class="input" type="date" required>
+        </div>
+        <div>
+          <label class="small muted">Priority</label>
+          <select id="stAssignPriority" class="select">
+            <option>High</option>
+            <option selected>Medium</option>
+            <option>Low</option>
+          </select>
+        </div>
+      </div>
+
       <div style="margin-bottom:8px">
         <label class="small muted">Assign to (check)</label>
         <div
@@ -3997,6 +4012,8 @@ export default function ProjectManagerClient() {
 
       const stageSel = el('stAssignStageSel') as HTMLInputElement | null;
       const subSel = el('stAssignSubSel') as HTMLInputElement | null;
+      const dueSel = el('stAssignDue') as HTMLInputElement | null;
+      const prioritySel = el('stAssignPriority') as HTMLSelectElement | null;
       const assignList = el('stAssignUserMulti');
       const assignBtn = el('stAssignBtn');
       const closeBtn = el('stAssignClose');
@@ -4110,6 +4127,14 @@ export default function ProjectManagerClient() {
 
           const stageName = stageSel?.value || '';
           const subName = subSel?.value || '';
+          const dueDate = dueSel?.value || null;
+          const priority = prioritySel?.value || 'Medium';
+
+          // Validate due date
+          if (!dueDate) {
+            toast('Due date is required');
+            return;
+          }
 
           if (!canEditProjectLayout(proj)) {
             toast('Only project leads or admins can assign/edit tasks here');
@@ -4160,11 +4185,18 @@ export default function ProjectManagerClient() {
                   .from('tasks')
                   .insert({
                     project_id: proj.id,
+                    project_name: proj.name,
                     stage_id: bulkAssignStageName,
                     sub_id: sub,
                     assignee_ids: selectedIds,
+                    assignees: selectedIds,
                     status: 'Pending',
                     task: `${bulkAssignStageName} - ${sub}`,
+                    due: dueDate,
+                    priority: priority,
+                    description: '',
+                    created_by_id: currentUser.staff_id,
+                    created_by_name: currentUser.name,
                   })
                   .select();
 
@@ -4229,8 +4261,8 @@ export default function ProjectManagerClient() {
                 sub_id: subName,
                 task: title,
                 description: '',
-                due: null,
-                priority: 'Medium',
+                due: dueDate,
+                priority: priority,
                 status: 'Pending',
                 assignee_ids,
                 assignees,
