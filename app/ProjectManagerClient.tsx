@@ -2427,7 +2427,10 @@ export default function ProjectManagerClient() {
           <td>${assigneesHtml}</td>
           <td>${esc(dueStr)}</td>
           <td>${esc(t.priority || '')}</td>
-          <td>${esc(t.description || '')}</td>
+          <td>
+            ${esc(t.description || '')}
+            <div class="small muted" style="margin-top:2px">${esc(t.status || 'Pending')}</div>
+          </td>
           <td style="text-align:right; display:flex; gap:4px; justify-content:flex-end; flex-wrap:wrap;">
 
             <button class="btn-sm act-status" data-id="${esc(t.id)}">Status</button>
