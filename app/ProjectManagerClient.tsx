@@ -4114,12 +4114,12 @@ export default function ProjectManagerClient() {
       (window as any).openStageBulkAssign = openStageBulkAssign;
 
       closeBtn &&
-        closeBtn.addEventListener('click', () => {
+        (closeBtn.onclick = () => {
           panel.classList.remove('show');
         });
 
       assignBtn &&
-        assignBtn.addEventListener('click', async () => {
+        (assignBtn.onclick = async () => {
           // Prevent double-clicks
           if ((assignBtn as HTMLButtonElement).disabled) return;
           (assignBtn as HTMLButtonElement).disabled = true;
