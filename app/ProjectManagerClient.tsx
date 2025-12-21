@@ -1059,7 +1059,15 @@ export default function ProjectManagerClient() {
         currentUser.name || currentUser.staff_id
       );
 
+      // Update local task object immediately for instant UI feedback
+      task.status = newStatus;
+
       toast('Status updated');
+
+      // Re-render Kanban board immediately
+      renderKanban();
+
+      // Then refresh all data from database
       await loadDataAfterLogin();
     }
 
