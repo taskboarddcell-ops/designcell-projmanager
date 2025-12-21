@@ -1103,6 +1103,56 @@ tr.low {
   border-color: #cbd5e1;
 }
 
+/* Drag handle for reordering */
+.drag-handle {
+  cursor: grab;
+  padding: 6px 4px;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s;
+  flex-shrink: 0;
+  user-select: none;
+  touch-action: none;
+}
+
+.drag-handle:hover {
+  background: #e2e8f0;
+  color: #64748b;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+  background: #cbd5e1;
+}
+
+.drag-handle svg {
+  pointer-events: none;
+}
+
+/* Dragging states */
+.editor-stage-card.dragging,
+.editor-sub-row.dragging {
+  opacity: 0.6;
+  transform: scale(1.02);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+  z-index: 100;
+}
+
+.editor-stage-card.drag-over {
+  border-color: #3b82f6;
+  border-style: dashed;
+  background: #f0f9ff;
+}
+
+.editor-sub-row.drag-over {
+  border-color: #3b82f6;
+  border-style: dashed;
+  background: #f0f9ff;
+}
+
 .editor-stage-header {
   display: flex;
   align-items: center;

@@ -3107,7 +3107,11 @@ export default function ProjectManagerClient() {
 
           const div = document.createElement('div');
           div.className = 'editor-sub-row';
+          div.setAttribute('draggable', 'true');
           div.innerHTML = `
+            <span class="drag-handle sub-drag" title="Drag to reorder">
+              <svg xmlns="http://www.w3.org/2000/svg" height="16" viewBox="0 -960 960 960" width="16" fill="currentColor"><path d="M360-160q-33 0-56.5-23.5T280-240q0-33 23.5-56.5T360-320q33 0 56.5 23.5T440-240q0 33-23.5 56.5T360-160Zm240 0q-33 0-56.5-23.5T520-240q0-33 23.5-56.5T600-320q33 0 56.5 23.5T680-240q0 33-23.5 56.5T600-160ZM360-400q-33 0-56.5-23.5T280-480q0-33 23.5-56.5T360-560q33 0 56.5 23.5T440-480q0 33-23.5 56.5T360-400Zm240 0q-33 0-56.5-23.5T520-480q0-33 23.5-56.5T600-560q33 0 56.5 23.5T680-480q0 33-23.5 56.5T600-400ZM360-640q-33 0-56.5-23.5T280-720q0-33 23.5-56.5T360-800q33 0 56.5 23.5T440-720q0 33-23.5 56.5T360-640Zm240 0q-33 0-56.5-23.5T520-720q0-33 23.5-56.5T600-800q33 0 56.5 23.5T680-720q0 33-23.5 56.5T600-640Z"/></svg>
+            </span>
             <input class="editor-sub-name" placeholder="Sub-stage name">
             <button type="button" class="btn-icon sub-del" title="Remove sub-stage">
               <svg xmlns="http://www.w3.org/2000/svg" height="18" viewBox="0 -960 960 960" width="18" fill="#ef4444"><path d="M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520ZM360-280h80v-360h-80v360Zm160 0h80v-360h-80v360ZM280-720v520-520Z"/></svg>
@@ -3121,6 +3125,9 @@ export default function ProjectManagerClient() {
             delBtn.addEventListener('click', () => {
               div.remove();
             });
+
+          // Wire drag events for this new sub-stage
+          wireSubRowDrag(div, subList);
 
           // Focus the new input
           const input = div.querySelector<HTMLElement>('input');
@@ -3155,6 +3162,131 @@ export default function ProjectManagerClient() {
           const input = newRow.querySelector<HTMLElement>('.editor-stage-name');
           if (input) input.focus();
         });
+
+      // ===== DRAG AND DROP FOR STAGES =====
+      const stageDragHandle = row.querySelector<HTMLElement>('.stage-drag');
+
+      if (stageDragHandle) {
+        let isDragging = false;
+
+        stageDragHandle.addEventListener('mousedown', () => {
+          isDragging = true;
+        });
+
+        row.addEventListener('dragstart', (e) => {
+          if (!isDragging) {
+            e.preventDefault();
+            return;
+          }
+          row.classList.add('dragging');
+          e.dataTransfer?.setData('text/plain', 'stage');
+          e.dataTransfer!.effectAllowed = 'move';
+        });
+
+        row.addEventListener('dragend', () => {
+          row.classList.remove('dragging');
+          isDragging = false;
+          // Remove all drag-over classes
+          document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+        });
+
+        row.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          const dragging = document.querySelector('.editor-stage-card.dragging') as HTMLElement;
+          if (dragging && dragging !== row) {
+            row.classList.add('drag-over');
+          }
+        });
+
+        row.addEventListener('dragleave', () => {
+          row.classList.remove('drag-over');
+        });
+
+        row.addEventListener('drop', (e) => {
+          e.preventDefault();
+          row.classList.remove('drag-over');
+          const dragging = document.querySelector('.editor-stage-card.dragging') as HTMLElement;
+          if (dragging && dragging !== row) {
+            const parent = row.parentElement;
+            if (parent) {
+              // Determine if we should insert before or after
+              const rect = row.getBoundingClientRect();
+              const midY = rect.top + rect.height / 2;
+              if (e.clientY < midY) {
+                parent.insertBefore(dragging, row);
+              } else {
+                parent.insertBefore(dragging, row.nextSibling);
+              }
+            }
+          }
+        });
+      }
+
+      // ===== DRAG AND DROP FOR SUB-STAGES =====
+      if (subList) {
+        subList.querySelectorAll<HTMLElement>('.editor-sub-row').forEach((subRow) => {
+          wireSubRowDrag(subRow, subList);
+        });
+      }
+    }
+
+    // Wire drag events for a sub-stage row
+    function wireSubRowDrag(subRow: HTMLElement, subList: HTMLElement) {
+      const subDragHandle = subRow.querySelector<HTMLElement>('.sub-drag');
+      if (!subDragHandle) return;
+
+      let isDragging = false;
+
+      subDragHandle.addEventListener('mousedown', () => {
+        isDragging = true;
+      });
+
+      subRow.addEventListener('dragstart', (e) => {
+        e.stopPropagation(); // Prevent triggering stage drag
+        if (!isDragging) {
+          e.preventDefault();
+          return;
+        }
+        subRow.classList.add('dragging');
+        e.dataTransfer?.setData('text/plain', 'substage');
+        e.dataTransfer!.effectAllowed = 'move';
+      });
+
+      subRow.addEventListener('dragend', () => {
+        subRow.classList.remove('dragging');
+        isDragging = false;
+        document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+      });
+
+      subRow.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const dragging = subList.querySelector('.editor-sub-row.dragging') as HTMLElement;
+        if (dragging && dragging !== subRow) {
+          subRow.classList.add('drag-over');
+        }
+      });
+
+      subRow.addEventListener('dragleave', () => {
+        subRow.classList.remove('drag-over');
+      });
+
+      subRow.addEventListener('drop', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        subRow.classList.remove('drag-over');
+        const dragging = subList.querySelector('.editor-sub-row.dragging') as HTMLElement;
+        if (dragging && dragging !== subRow) {
+          const rect = subRow.getBoundingClientRect();
+          const midY = rect.top + rect.height / 2;
+          const addBtn = subList.querySelector('.sub-add');
+          if (e.clientY < midY) {
+            subList.insertBefore(dragging, subRow);
+          } else {
+            subList.insertBefore(dragging, subRow.nextSibling === addBtn ? addBtn : subRow.nextSibling);
+          }
+        }
+      });
     }
 
     // Helper to create the DOM structure for a stage row
@@ -3162,7 +3294,10 @@ export default function ProjectManagerClient() {
       const subsHtml = subStages
         .map(
           (s) => `
-            <div class="editor-sub-row">
+            <div class="editor-sub-row" draggable="true">
+              <span class="drag-handle sub-drag" title="Drag to reorder">
+                <svg xmlns="http://www.w3.org/2000/svg" height="16" viewBox="0 -960 960 960" width="16" fill="currentColor"><path d="M360-160q-33 0-56.5-23.5T280-240q0-33 23.5-56.5T360-320q33 0 56.5 23.5T440-240q0 33-23.5 56.5T360-160Zm240 0q-33 0-56.5-23.5T520-240q0-33 23.5-56.5T600-320q33 0 56.5 23.5T680-240q0 33-23.5 56.5T600-160ZM360-400q-33 0-56.5-23.5T280-480q0-33 23.5-56.5T360-560q33 0 56.5 23.5T440-480q0 33-23.5 56.5T360-400Zm240 0q-33 0-56.5-23.5T520-480q0-33 23.5-56.5T600-560q33 0 56.5 23.5T680-480q0 33-23.5 56.5T600-400ZM360-640q-33 0-56.5-23.5T280-720q0-33 23.5-56.5T360-800q33 0 56.5 23.5T440-720q0 33-23.5 56.5T360-640Zm240 0q-33 0-56.5-23.5T520-720q0-33 23.5-56.5T600-800q33 0 56.5 23.5T680-720q0 33-23.5 56.5T600-640Z"/></svg>
+              </span>
               <input class="editor-sub-name" value="${esc(s)}" placeholder="Sub-stage name">
               <button type="button" class="btn-icon sub-del" title="Remove sub-stage">
                 <svg xmlns="http://www.w3.org/2000/svg" height="18" viewBox="0 -960 960 960" width="18" fill="#ef4444"><path d="M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520ZM360-280h80v-360h-80v360Zm160 0h80v-360h-80v360ZM280-720v520-520Z"/></svg>
@@ -3174,8 +3309,12 @@ export default function ProjectManagerClient() {
 
       const div = document.createElement('div');
       div.className = 'editor-stage-card';
+      div.setAttribute('draggable', 'true');
       div.innerHTML = `
         <div class="editor-stage-header">
+          <span class="drag-handle stage-drag" title="Drag to reorder">
+            <svg xmlns="http://www.w3.org/2000/svg" height="20" viewBox="0 -960 960 960" width="20" fill="currentColor"><path d="M360-160q-33 0-56.5-23.5T280-240q0-33 23.5-56.5T360-320q33 0 56.5 23.5T440-240q0 33-23.5 56.5T360-160Zm240 0q-33 0-56.5-23.5T520-240q0-33 23.5-56.5T600-320q33 0 56.5 23.5T680-240q0 33-23.5 56.5T600-160ZM360-400q-33 0-56.5-23.5T280-480q0-33 23.5-56.5T360-560q33 0 56.5 23.5T440-480q0 33-23.5 56.5T360-400Zm240 0q-33 0-56.5-23.5T520-480q0-33 23.5-56.5T600-560q33 0 56.5 23.5T680-480q0 33-23.5 56.5T600-400ZM360-640q-33 0-56.5-23.5T280-720q0-33 23.5-56.5T360-800q33 0 56.5 23.5T440-720q0 33-23.5 56.5T360-640Zm240 0q-33 0-56.5-23.5T520-720q0-33 23.5-56.5T600-800q33 0 56.5 23.5T680-720q0 33-23.5 56.5T600-640Z"/></svg>
+          </span>
           <button type="button" class="editor-toggle-btn" title="Toggle">
             <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 -960 960 960" width="24" fill="#64748b"><path d="M480-345 240-585l56-56 184 184 184-184 56 56-240 240Z"/></svg>
           </button>
