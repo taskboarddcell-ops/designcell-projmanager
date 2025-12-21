@@ -17,7 +17,7 @@ Vercel doesn't have the `SUPABASE_SERVICE_ROLE_KEY` environment variable.
 
 ### Step 2: Navigate to Environment Variables
 1. Click on **Settings** tab (top navigation)
-2. Click on **Environment Variables** in the left sidebar
+2. Click on **Environment WE** in the left sidebar
 
 ### Step 3: Add the Service Role Key
 Click **"Add New"** button and enter:

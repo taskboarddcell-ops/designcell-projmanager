@@ -4,6 +4,25 @@
 import { useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
 
+// --- PHASE 3: HANDLER IMPORTS ---
+import {
+  // Types
+  Task, Project, User, AssignState,
+
+  // Utilities
+  esc, formatDate, getProjectYear, isAdmin,
+
+  // Task Handlers
+  createTask, updateTask, bulkAssignTasks,
+
+  // Project Handlers
+  fetchProjects, sortProjectsByYear, filterProjectsByYear,
+
+  // User Handlers
+  loginUser, loadSession, saveSession, clearSession,
+  getAssignableUsers
+} from './handlers';
+
 // ------------ STATIC HTML (layout as string) ------------
 const staticHtml = `
   <div class="app">
@@ -252,7 +271,6 @@ const staticHtml = `
         <section id="viewStages" class="card" style="display:none">
           <div class="row" id="layoutActions" style="margin-bottom:12px;display:none">
             <button id="btnEditLayout" class="btn">✎ Edit Layout</button>
-            <button id="btnBulkAssign" class="btn" style="display:none">+ Bulk Tasks</button>
           </div>
           <div id="projectInfoCard" style="display:none;margin-bottom:16px;"></div>
           <div id="stagesBox"></div>
@@ -662,25 +680,9 @@ const staticHtml = `
   </div>
 `;
 
-// ------------ HELPERS (no TypeScript types) ------------
-function esc(str) {
-  return String(str ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
 
-
-function formatDate(d) {
-  if (!d) return '-';
-  try {
-    return new Date(d).toLocaleDateString();
-  } catch {
-    return String(d);
-  }
-}
-
+// ------------ HELPERS imported from handlers ------------
+// esc and formatDate are imported from './handlers'
 
 // ------------ MAIN CLIENT COMPONENT ------------
 export default function ProjectManagerClient() {
@@ -788,6 +790,293 @@ export default function ProjectManagerClient() {
     let projectLayoutEditTargetId: string | null = null;
 
     const projectUsersCache: Record<string, any[]> = {};
+
+    // --- ASSIGNMENT STATE (Global to effect) ---
+    const assignState = {
+      proj: null as any,
+      stage: '',
+      sub: '',
+      taskId: '',
+      isBulk: false,
+      bulkStage: ''
+    };
+
+    // --- PHASE 1 FIX: Global debouncing flag to prevent duplicate operations ---
+    let isAssignmentInProgress = false;
+    let handlersInitialized = false;
+    let stagesBoxListenerAttached = false;
+
+    // --- PHASE 1 FIX: Single consolidated assignment handler ---
+    // Removed duplicate setTimeout blocks that were causing multiple handler registrations
+    function initializeAssignmentHandlers() {
+      if (handlersInitialized) {
+        console.log('[HANDLERS] Already initialized, skipping');
+        return;
+      }
+      handlersInitialized = true;
+      console.log('[HANDLERS] Initializing assignment handlers');
+
+      const btn = container.querySelector('#stAssignBtn') as HTMLButtonElement;
+      if (btn) {
+        // Use addEventListener instead of onclick to prevent overwriting
+        btn.addEventListener('click', async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+
+          // --- PHASE 1 FIX: Global debouncing ---
+          if (isAssignmentInProgress) {
+            console.log('[ASSIGN] Assignment already in progress, ignoring click');
+            return;
+          }
+          if (btn.disabled) return;
+
+          isAssignmentInProgress = true;
+          btn.disabled = true;
+
+          try {
+            if (!currentUser) {
+              toast('Please login first');
+              return;
+            }
+
+            // Capture state snapshot
+            const state = assignState;
+
+            // --- PHASE 1 FIX: Get fresh project reference at execution time ---
+            // Instead of using stale closure reference, look up current project
+            let proj = state.proj;
+            if (!proj && activeProjectName) {
+              proj = projects.find(p => p.name === activeProjectName);
+              if (proj) {
+                console.log('[ASSIGN] Resolved project from activeProjectName:', activeProjectName);
+              }
+            }
+
+            if (!proj) {
+              toast('No project context - please select a project first');
+              return;
+            }
+
+            // --- PHASE 1 FIX: Validate project still matches active context ---
+            if (activeProjectName && proj.name !== activeProjectName) {
+              console.warn('[ASSIGN] Project context mismatch, refreshing');
+              proj = projects.find(p => p.name === activeProjectName);
+              if (!proj) {
+                toast('Project context changed - please try again');
+                return;
+              }
+              state.proj = proj;
+            }
+
+            // UI Elements - dynamically queried to ensure freshness
+            const stageSel = document.getElementById('stAssignStageSel') as HTMLInputElement;
+            const subSel = document.getElementById('stAssignSubSel') as HTMLInputElement;
+            const dueSel = document.getElementById('stAssignDue') as HTMLInputElement;
+            const prioritySel = document.getElementById('stAssignPriority') as HTMLSelectElement;
+            const assignList = document.getElementById('stAssignUserMulti');
+            const panel = document.getElementById('stAssignPanel');
+
+            const stageName = stageSel?.value || '';
+            const subName = subSel?.value || '';
+            const dueDate = dueSel?.value || null;
+            const priority = prioritySel?.value || 'Medium';
+
+            if (!dueDate) {
+              toast('Due date is required');
+              return;
+            }
+
+            // Permission Check
+            const isLead = (proj.lead_ids || []).includes(currentUser.staff_id);
+            if (!isAdmin() && !isLead) {
+              toast('Only project leads or admins can assign/edit tasks');
+              return;
+            }
+
+            // --- BULK ASSIGN LOGIC ---
+            if (state.isBulk && state.bulkStage) {
+              const checked = assignList?.querySelectorAll<HTMLInputElement>('.asgU:checked');
+              const assigneeIds: string[] = [];
+              checked?.forEach((c) => assigneeIds.push(c.value));
+              const assigneeNames = assigneeIds.map(id => {
+                const u = (projectUsersCache[proj.id] || []).find(x => x.staff_id === id);
+                return u?.name || id;
+              });
+
+              if (assigneeIds.length === 0) {
+                toast('Select at least one assignee');
+                return;
+              }
+
+              const result = await bulkAssignTasks(supabase, {
+                project: proj,
+                stageName: state.bulkStage,
+                dueDate: dueDate,
+                priority: priority,
+                assigneeIds: assigneeIds,
+                assigneeNames: assigneeNames,
+                currentUser: currentUser,
+                existingTasks: tasks // Pass in-memory tasks for dedup check
+              });
+
+              if (result.success) {
+                // Update local state with new tasks
+                result.tasks.forEach(newTask => {
+                  const existingIdx = tasks.findIndex(t => t.id === newTask.id);
+                  if (existingIdx >= 0) {
+                    tasks[existingIdx] = newTask;
+                  } else {
+                    tasks.push(newTask);
+                  }
+                });
+
+                toast(`Created ${result.createdCount}, updated ${result.updatedCount} tasks`);
+                if (result.skippedCount > 0) {
+                  console.warn(`Skipped ${result.skippedCount} invalid sub-stages`);
+                }
+
+                if (panel) panel.classList.remove('show');
+                state.bulkStage = '';
+                state.isBulk = false;
+                renderProjectStructure();
+              } else {
+                toast(result.error || 'Bulk assignment failed');
+              }
+              return;
+            }
+
+            // --- SINGLE / MODIFY LOGIC ---
+            if (subName === '(All Sub-stages)' || !subName.trim()) {
+              toast('Please select a specific sub-stage');
+              return;
+            }
+
+            const checked = assignList?.querySelectorAll<HTMLInputElement>('.asgU:checked');
+            const assigneeIds: string[] = [];
+
+            checked?.forEach(c => {
+              assigneeIds.push(c.value);
+            });
+            const assigneeNames = assigneeIds.map(id => {
+              const u = (projectUsersCache[proj.id] || []).find(x => x.staff_id === id);
+              return u?.name || id;
+            });
+
+            if (assigneeIds.length === 0 && !state.taskId) {
+              toast('Select at least one assignee');
+              return;
+            }
+
+            if (state.taskId) {
+              // UPDATE EXISTING
+              const result = await updateTask(supabase, {
+                taskId: state.taskId,
+                assigneeIds: assigneeIds,
+                assigneeNames: assigneeNames,
+                dueDate: dueDate,
+                priority: priority
+              });
+
+              if (result.success) {
+                const t = tasks.find(x => x.id === state.taskId);
+                if (t) {
+                  t.assignee_ids = assigneeIds;
+                  t.assignees = assigneeNames;
+                  t.due = dueDate;
+                  t.priority = priority;
+                }
+                toast('Task updated');
+                if (panel) panel.classList.remove('show');
+                renderProjectStructure();
+              } else {
+                toast('Failed to update task: ' + result.error);
+              }
+            } else {
+              // CREATE NEW
+              const title = `${stageName} - ${subName}`;
+              const result = await createTask(supabase, {
+                projectId: proj.id,
+                projectName: proj.name,
+                stageId: stageName,
+                subId: subName,
+                taskTitle: title,
+                dueDate: dueDate,
+                priority: priority,
+                assigneeIds: assigneeIds,
+                assigneeNames: assigneeNames,
+                createdById: currentUser.staff_id,
+                createdByName: currentUser.name
+              });
+
+              if (result.success && result.task) {
+                tasks.push(result.task);
+                toast('Task created');
+                if (panel) panel.classList.remove('show');
+                renderProjectStructure();
+              } else {
+                toast('Failed to create task: ' + (result.error || 'Unknown error'));
+              }
+            }
+
+          } catch (err) {
+            console.error('Assign handler error', err);
+            toast('Error processing request');
+          } finally {
+            btn.disabled = false;
+            // --- PHASE 1 FIX: Add delay before allowing next operation ---
+            setTimeout(() => {
+              isAssignmentInProgress = false;
+            }, 500);
+          }
+        });
+      }
+
+      // --- PHASE 1 FIX: Global Event Delegation for Sub-Stage Assignment Buttons ---
+      // Only attach once to prevent duplicate handlers
+      if (!stagesBoxListenerAttached) {
+        const stagesBox = container.querySelector('#stagesBox');
+        if (stagesBox) {
+          stagesBoxListenerAttached = true;
+          let isProcessing = false;
+
+          stagesBox.addEventListener('click', async (ev) => {
+            const target = ev.target as HTMLElement;
+            // Traverse up in case click was on an icon inside the button
+            const clickedBtn = target.closest('.sub-assign');
+            if (!clickedBtn) return;
+
+            ev.stopPropagation();
+
+            if (isProcessing) {
+              console.log('[DELEGATION] Already processing, skipping');
+              return;
+            }
+            isProcessing = true;
+
+            try {
+              const stageName = clickedBtn.getAttribute('data-stage') || '';
+              const subName = clickedBtn.getAttribute('data-sub') || '';
+              const taskId = clickedBtn.getAttribute('data-task-id') || '';
+
+              console.log('[DELEGATION] Opening substage assign:', { stageName, subName, taskId });
+
+              if ((window as any).openSubstageAssign) {
+                await (window as any).openSubstageAssign(stageName, subName, taskId);
+              } else {
+                console.error('openSubstageAssign not ready');
+              }
+            } catch (e) {
+              console.error(e);
+            } finally {
+              setTimeout(() => { isProcessing = false; }, 300);
+            }
+          });
+        }
+      }
+    }
+
+    // Initialize handlers after a short delay to ensure DOM is ready
+    setTimeout(initializeAssignmentHandlers, 100);
 
     // ---------- HELPERS ----------
     const el = (id: string) => container.querySelector<HTMLElement>(`#${id}`);
@@ -3978,7 +4267,7 @@ export default function ProjectManagerClient() {
     const stagesBox = el('stagesBox');
     const layoutActions = el('layoutActions');
     const btnEditLayout = el('btnEditLayout');
-    const btnBulkAssign = el('btnBulkAssign');
+
 
     // Load users for a project and cache them
     async function loadProjectUsers(projectId: string) {
@@ -4005,329 +4294,157 @@ export default function ProjectManagerClient() {
     }
 
     // Per-substage assign UI (uses projectUsersCache)
+    // --- PHASE 1 FIX: Modified to get fresh project reference at execution time ---
     function wireSubstageAssignUI(proj: any) {
       if (!proj) return;
 
       const panel = el('stAssignPanel');
       if (!panel) return;
 
-      const stageSel = el('stAssignStageSel') as HTMLInputElement | null;
-      const subSel = el('stAssignSubSel') as HTMLInputElement | null;
-      const dueSel = el('stAssignDue') as HTMLInputElement | null;
-      const prioritySel = el('stAssignPriority') as HTMLSelectElement | null;
+      const stageSel = el('stAssignStageSel') as HTMLInputElement;
+      const subSel = el('stAssignSubSel') as HTMLInputElement;
+      const dueSel = el('stAssignDue') as HTMLInputElement;
+      const prioritySel = el('stAssignPriority') as HTMLSelectElement;
       const assignList = el('stAssignUserMulti');
       const assignBtn = el('stAssignBtn');
       const closeBtn = el('stAssignClose');
 
-      let selectedExistingTask: any = null;
-      let bulkAssignStageName: string | null = null; // New state for bulk assign
+      // --- PHASE 1 FIX: Get fresh project reference at execution time ---
+      const getCurrentProject = () => {
+        // First try to use activeProjectName for fresh lookup
+        if (activeProjectName) {
+          const freshProj = projects.find(p => p.name === activeProjectName);
+          if (freshProj) {
+            return freshProj;
+          }
+        }
+        // Fall back to the proj passed in (for initial render)
+        return proj;
+      };
 
-      const openSubstageAssign = async (
-        stageName: string,
-        subName: string,
-        existingTaskId?: string,
-      ) => {
-        bulkAssignStageName = null; // Reset bulk mode
-        if (subSel) subSel.disabled = false;
-        if (!projectUsersCache[proj.id]) {
-          await loadProjectUsers(proj.id);
+      const openSubstageAssign = async (stageName: string, subName: string, existingTaskId?: string) => {
+        // --- PHASE 1 FIX: Get fresh project reference ---
+        const currentProj = getCurrentProject();
+        if (!currentProj) {
+          toast('Please select a project first');
+          return;
         }
 
-        selectedExistingTask = null;
+        console.log('[openSubstageAssign] Project:', currentProj.name, 'Stage:', stageName, 'Sub:', subName);
 
-        if (stageSel) stageSel.value = stageName || '';
-        if (subSel) subSel.value = subName || '';
+        assignState.proj = currentProj;
+        assignState.stage = stageName;
+        assignState.sub = subName;
+        assignState.taskId = existingTaskId || '';
+        assignState.isBulk = false;
+        assignState.bulkStage = '';
 
+        // UI Setup
+        if (subSel) subSel.disabled = false;
+        if (stageSel) stageSel.value = stageName;
+        if (subSel) subSel.value = subName;
+        if (dueSel) dueSel.value = '';
+        if (prioritySel) prioritySel.value = 'Medium';
+
+        // Load users if needed
+        if (!projectUsersCache[currentProj.id]) {
+          await loadProjectUsers(currentProj.id);
+        }
+
+        // Render users
         if (assignList) assignList.innerHTML = '';
-
-        if (assignList && projectUsersCache[proj.id]) {
-          projectUsersCache[proj.id].forEach((u) => {
+        const users = projectUsersCache[currentProj.id] || [];
+        if (assignList) {
+          users.forEach(u => {
             assignList.innerHTML += `
-            <label class="chk-line">
-              <input type="checkbox" class="asgU" value="${esc(
-              u.staff_id,
-            )}" data-name="${esc(u.name || '')}">
-              <span>${esc(u.name || '')} [${esc(u.staff_id)}]</span>
-            </label>
-          `;
+                    <label class="chk-line">
+                      <input type="checkbox" class="asgU" value="${esc(u.staff_id)}" data-name="${esc(u.name || '')}">
+                      <span>${esc(u.name || '')} [${esc(u.staff_id)}]</span>
+                    </label>
+                 `;
           });
         }
 
+        // Pre-fill existing
         if (existingTaskId) {
-          const existingTask = tasks.find(
-            (t) => String(t.id) === String(existingTaskId),
-          );
-
-          if (existingTask) {
-            selectedExistingTask = existingTask;
-
-            const ids = existingTask.assignee_ids || [];
-            assignList
-              ?.querySelectorAll<HTMLInputElement>('.asgU')
-              .forEach((chk) => {
-                if (ids.includes(chk.value)) chk.checked = true;
-              });
-
+          const t = tasks.find(x => x.id === existingTaskId);
+          if (t) {
+            if (dueSel && t.due) dueSel.value = t.due;
+            if (prioritySel && t.priority) prioritySel.value = t.priority;
+            const ids = t.assignee_ids || [];
+            assignList?.querySelectorAll<HTMLInputElement>('.asgU').forEach(c => {
+              if (ids.includes(c.value)) c.checked = true;
+            });
             if (assignBtn) assignBtn.textContent = 'Update Task';
           }
         } else {
           if (assignBtn) assignBtn.textContent = 'Create Task';
         }
 
-        panel.classList.add('show');
+        panel?.classList.add('show');
       };
 
-      // New function for Bulk Assign
       const openStageBulkAssign = async (stageName: string) => {
-        if (!projectUsersCache[proj.id]) {
-          await loadProjectUsers(proj.id);
+        // --- PHASE 1 FIX: Get fresh project reference ---
+        const currentProj = getCurrentProject();
+        if (!currentProj) {
+          toast('Please select a project first');
+          return;
         }
 
-        bulkAssignStageName = stageName;
-        selectedExistingTask = null;
+        console.log('[openStageBulkAssign] Project:', currentProj.name, 'Stage:', stageName);
+
+        // --- PHASE 1 FIX: Validate this is the correct project context ---
+        if (activeProjectName && currentProj.name !== activeProjectName) {
+          console.warn('[openStageBulkAssign] Context mismatch! Active:', activeProjectName, 'Got:', currentProj.name);
+          toast('Project context changed - please try again');
+          return;
+        }
+
+        assignState.proj = currentProj;
+        assignState.stage = stageName;
+        assignState.sub = '(All Sub-stages)'; // Display only - actual logic iterates through real subs
+        assignState.taskId = '';
+        assignState.isBulk = true;
+        assignState.bulkStage = stageName;
+
+        if (!projectUsersCache[currentProj.id]) {
+          await loadProjectUsers(currentProj.id);
+        }
 
         if (stageSel) stageSel.value = stageName;
         if (subSel) {
           subSel.value = '(All Sub-stages)';
           subSel.disabled = true;
         }
+        if (dueSel) dueSel.value = '';
+        if (prioritySel) prioritySel.value = 'Medium';
 
         if (assignList) assignList.innerHTML = '';
-        if (assignList && projectUsersCache[proj.id]) {
-          projectUsersCache[proj.id].forEach((u) => {
+        const users = projectUsersCache[currentProj.id] || [];
+        if (assignList) {
+          users.forEach(u => {
             assignList.innerHTML += `
-            <label class="chk-line">
-              <input type="checkbox" class="asgU" value="${esc(
-              u.staff_id,
-            )}" data-name="${esc(u.name || '')}">
-              <span>${esc(u.name || '')} [${esc(u.staff_id)}]</span>
-            </label>
-          `;
+                      <label class="chk-line">
+                        <input type="checkbox" class="asgU" value="${esc(u.staff_id)}" data-name="${esc(u.name || '')}">
+                        <span>${esc(u.name || '')} [${esc(u.staff_id)}]</span>
+                      </label>
+                   `;
           });
         }
 
         if (assignBtn) assignBtn.textContent = 'Bulk Assign Tasks';
-        panel.classList.add('show');
+        panel?.classList.add('show');
       };
 
-      // Expose function on window for stage/sub rows
       (window as any).openSubstageAssign = openSubstageAssign;
       (window as any).openStageBulkAssign = openStageBulkAssign;
 
-      closeBtn &&
-        (closeBtn.onclick = () => {
-          panel.classList.remove('show');
-        });
-
-      assignBtn &&
-        (assignBtn.onclick = async () => {
-          // Prevent double-clicks
-          if ((assignBtn as HTMLButtonElement).disabled) return;
-          (assignBtn as HTMLButtonElement).disabled = true;
-
-          try {
-            if (!currentUser) {
-              toast('Please login first');
-              return;
-            }
-
-            const stageName = stageSel?.value || '';
-            const subName = subSel?.value || '';
-            const dueDate = dueSel?.value || null;
-            const priority = prioritySel?.value || 'Medium';
-
-            // Validate due date
-            if (!dueDate) {
-              toast('Due date is required');
-              return;
-            }
-
-            if (!canEditProjectLayout(proj)) {
-              toast('Only project leads or admins can assign/edit tasks here');
-              return;
-            }
-
-            // --- BULK ASSIGN LOGIC ---
-            if (bulkAssignStageName) {
-              const rawPlan = proj.stage_plan || [];
-              const plan = Array.isArray(rawPlan) ? rawPlan : [];
-              const stage = plan.find((s: any) => (s.stage || s.name) === bulkAssignStageName);
-
-              if (!stage) {
-                toast('Stage not found');
-                return;
-              }
-
-              const subs = stage.subs || stage.sub_stages || [];
-              if (subs.length === 0) {
-                toast('No sub-stages to assign');
-                return;
-              }
-
-              const checked = assignList?.querySelectorAll<HTMLInputElement>('.asgU:checked');
-              const selectedIds: string[] = [];
-              checked?.forEach((c) => selectedIds.push(c.value));
-
-              let updateCount = 0;
-              // Iterate all substages and upsert tasks
-              for (const sub of subs) {
-                const existing = tasks.find(
-                  (t) =>
-                    t.project_id === proj.id &&
-                    (t.stage_id || '') === bulkAssignStageName &&
-                    (t.sub_id || '') === sub
-                );
-
-                if (existing) {
-                  // Update existing task
-                  await supabase
-                    .from('tasks')
-                    .update({ assignee_ids: selectedIds })
-                    .eq('id', existing.id);
-                  existing.assignee_ids = selectedIds;
-                } else {
-                  // Create new task
-                  const { data } = await supabase
-                    .from('tasks')
-                    .insert({
-                      project_id: proj.id,
-                      project_name: proj.name,
-                      stage_id: bulkAssignStageName,
-                      sub_id: sub,
-                      assignee_ids: selectedIds,
-                      assignees: selectedIds,
-                      status: 'Pending',
-                      task: `${bulkAssignStageName} - ${sub}`,
-                      due: dueDate,
-                      priority: priority,
-                      description: '',
-                      created_by_id: currentUser.staff_id,
-                      created_by_name: currentUser.name,
-                    })
-                    .select();
-
-                  if (data && data[0]) tasks.push(data[0]);
-                }
-                updateCount++;
-              }
-
-              toast(`Bulk assigned ${updateCount} tasks`);
-              panel.classList.remove('show');
-              renderProjectStructure(); // Refresh UI
-
-              // Clean up
-              bulkAssignStageName = null;
-              if (subSel) subSel.disabled = false;
-              return;
-            }
-            // --- END BULK ASSIGN ---
-
-            const chosen = assignList
-              ? Array.from(
-                assignList.querySelectorAll<HTMLInputElement>('.asgU:checked'),
-              )
-              : [];
-
-            const assignee_ids = chosen.map((c) => c.value);
-            const assignees = chosen.map(
-              (c) => c.getAttribute('data-name') || c.value,
-            );
-
-            // Only require assignees for NEW tasks, allow unassigning on updates
-            if (!assignee_ids.length && !selectedExistingTask) {
-              toast('Select at least one assignee');
-              return;
-            }
-
-            if (selectedExistingTask) {
-              const old = selectedExistingTask;
-
-              const { error } = await supabase
-                .from('tasks')
-                .update({
-                  assignee_ids,
-                  assignees,
-                })
-                .eq('id', old.id);
-
-              if (error) {
-                console.error('Update error', error);
-                toast('Failed to update task');
-                return;
-              }
-
-              toast('Task updated');
-            } else {
-              const title = `${stageName} - ${subName}`;
-
-              const { error } = await supabase.from('tasks').insert([
-                {
-                  project_id: proj.id,
-                  project_name: proj.name,
-                  stage_id: stageName,
-                  sub_id: subName,
-                  task: title,
-                  description: '',
-                  due: dueDate,
-                  priority: priority,
-                  status: 'Pending',
-                  assignee_ids,
-                  assignees,
-                  created_by_id: currentUser.staff_id,
-                  created_by_name: currentUser.name,
-                },
-              ]);
-
-              if (error) {
-                console.error('Insert error', error);
-                toast('Failed to create task');
-                return;
-              }
-
-              toast('Task created');
-            }
-
-            panel.classList.remove('show');
-            await loadDataAfterLogin();
-          } finally {
-            // Re-enable button
-            (assignBtn as HTMLButtonElement).disabled = false;
-          }
-        });
-
-      // Add event delegation for sub-assign buttons
-      const stagesBox = el('stagesBox');
-      if (stagesBox) {
-        // Use a flag to prevent duplicate listeners
-        if (!(stagesBox as any)._hasAssignListener) {
-          (stagesBox as any)._hasAssignListener = true;
-          let isProcessing = false; // Prevent rapid clicks
-
-          stagesBox.addEventListener('click', async (ev) => {
-            const target = ev.target as HTMLElement;
-            if (!target || !target.classList.contains('sub-assign')) return;
-
-            // Prevent rapid clicks
-            if (isProcessing) return;
-            isProcessing = true;
-
-            try {
-              ev.stopPropagation();
-              const stageName = target.getAttribute('data-stage') || '';
-              const subName = target.getAttribute('data-sub') || '';
-              const taskId = target.getAttribute('data-task-id') || '';
-
-              await openSubstageAssign(stageName, subName, taskId);
-            } finally {
-              // Small delay to prevent accidental double-clicks
-              setTimeout(() => {
-                isProcessing = false;
-              }, 300);
-            }
-          });
-        }
+      if (closeBtn) {
+        closeBtn.onclick = () => panel?.classList.remove('show');
       }
     }
+
 
 
     // ---------- RENDER PROJECT INFO CARD ----------
@@ -4698,10 +4815,7 @@ export default function ProjectManagerClient() {
           </div>
         `;
           if (btnEditLayout) btnEditLayout.textContent = '✎ Edit Layout';
-          if (btnBulkAssign) {
-            btnBulkAssign.textContent = 'Bulk Assign Tasks';
-            btnBulkAssign.style.display = canEdit ? '' : 'none';
-          }
+
           return;
         }
 
@@ -4799,10 +4913,7 @@ export default function ProjectManagerClient() {
           html || '<div class="small muted">No stages.</div>';
 
         if (btnEditLayout) btnEditLayout.textContent = '✎ Edit Layout';
-        if (btnBulkAssign) {
-          btnBulkAssign.textContent = 'Bulk Assign Tasks';
-          btnBulkAssign.style.display = canEdit ? '' : 'none';
-        }
+
 
         wireSubstageAssignUI(proj);
 
@@ -4842,10 +4953,7 @@ export default function ProjectManagerClient() {
 
         renderStagePlanEditor(normalizedPlan, stagesBox);
         if (btnEditLayout) btnEditLayout.textContent = '💾 Save Layout';
-        if (btnBulkAssign) {
-          btnBulkAssign.textContent = 'Cancel Edit';
-          btnBulkAssign.style.display = '';
-        }
+
       }
     }
 
@@ -4928,31 +5036,8 @@ export default function ProjectManagerClient() {
         }
       });
 
-    btnBulkAssign &&
-      btnBulkAssign.addEventListener('click', async () => {
-        const proj = activeProjectName
-          ? projects.find((p) => p.name === activeProjectName)
-          : null;
 
-        if (!proj) {
-          toast('Select a project first');
-          return;
-        }
-        if (!canEditProjectLayout(proj)) {
-          toast('Only leads or Admin can use this');
-          return;
-        }
 
-        if (layoutEditMode) {
-          layoutEditMode = false;
-          layoutEditingProjectId = null;
-          projectLayoutEditTargetId = null;
-          renderProjectStructure();
-          return;
-        }
-
-        await openBulkModalForProject(proj);
-      });
 
     // ---------- ROLE UI & ESC HANDLER ----------
     function userIsLeadAnywhere() {
