@@ -3068,71 +3068,80 @@ export default function ProjectManagerClient() {
       projOK.addEventListener('click', async () => {
         if (!pName || !pType || !pLeadBox) return;
 
-        const name = pName.value.trim();
-        const type = pType.value || null;
-        const lead_ids = pLeadBox
-          ? Array.from(
-            pLeadBox.querySelectorAll<HTMLInputElement>(
-              'input[type="checkbox"]:checked',
-            ),
-          ).map((cb) => cb.value)
-          : [];
+        // Prevent double-clicks
+        if ((projOK as HTMLButtonElement).disabled) return;
+        (projOK as HTMLButtonElement).disabled = true;
 
-        if (!name) {
-          toast('Project name is required');
-          return;
-        }
-        if (!type) {
-          toast('Project type is required');
-          return;
-        }
-        if (!lead_ids.length) {
-          toast('Select at least one lead');
-          return;
-        }
+        try {
+          const name = pName.value.trim();
+          const type = pType.value || null;
+          const lead_ids = pLeadBox
+            ? Array.from(
+              pLeadBox.querySelectorAll<HTMLInputElement>(
+                'input[type="checkbox"]:checked',
+              ),
+            ).map((cb) => cb.value)
+            : [];
 
-        const stage_plan = readStagePlanFromEditor(stagePlanEditor);
-
-        if (projectLayoutEditTargetId) {
-          const { error } = await supabase
-            .from('projects')
-            .update({
-              name,
-              type,
-              lead_ids,
-              stage_plan,
-            })
-            .eq('id', projectLayoutEditTargetId);
-
-          if (error) {
-            console.error('Update project layout error', error);
-            toast('Failed to update project');
+          if (!name) {
+            toast('Project name is required');
+            return;
+          }
+          if (!type) {
+            toast('Project type is required');
+            return;
+          }
+          if (!lead_ids.length) {
+            toast('Select at least one lead');
             return;
           }
 
-          toast('Project updated');
-        } else {
-          const { error } = await supabase.from('projects').insert([
-            {
-              name,
-              type,
-              lead_ids,
-              stage_plan,
-            },
-          ]);
+          const stage_plan = readStagePlanFromEditor(stagePlanEditor);
 
-          if (error) {
-            console.error('Create project error', error);
-            toast('Failed to create project');
-            return;
+          if (projectLayoutEditTargetId) {
+            const { error } = await supabase
+              .from('projects')
+              .update({
+                name,
+                type,
+                lead_ids,
+                stage_plan,
+              })
+              .eq('id', projectLayoutEditTargetId);
+
+            if (error) {
+              console.error('Update project layout error', error);
+              toast('Failed to update project');
+              return;
+            }
+
+            toast('Project updated');
+          } else {
+            const { error } = await supabase.from('projects').insert([
+              {
+                name,
+                type,
+                lead_ids,
+                stage_plan,
+              },
+            ]);
+
+            if (error) {
+              console.error('Create project error', error);
+              toast('Failed to create project');
+              return;
+            }
+
+            toast('Project created');
           }
 
-          toast('Project created');
+          hideModal(projModal);
+          projectLayoutEditTargetId = null;
+          await loadDataAfterLogin();
+        } finally {
+          // Re-enable button
+          (projOK as HTMLButtonElement).disabled = false;
         }
-
-        hideModal(projModal);
-        projectLayoutEditTargetId = null;
-        await loadDataAfterLogin();
       });
 
     // ---------- TASK MODAL ----------
@@ -3374,142 +3383,151 @@ export default function ProjectManagerClient() {
           return;
         }
 
-        const projectId = tProject.value;
-        const project = projects.find((p) => p.id === projectId);
-        if (!project) {
-          toast('Select a project');
-          return;
-        }
+        // Prevent double-clicks
+        if ((taskOK as HTMLButtonElement).disabled) return;
+        (taskOK as HTMLButtonElement).disabled = true;
 
-        // Creation permission check: Admin or Lead for THIS project
-        if (!editingTask) {
-          if (!isAdmin() && !isProjectLeadFor(project.id)) {
-            toast('Only Admins or Project Leads can create tasks for this project.');
+        try {
+          const projectId = tProject.value;
+          const project = projects.find((p) => p.id === projectId);
+          if (!project) {
+            toast('Select a project');
             return;
           }
-        }
 
-        const title = tDesc.value.trim();
-        if (!title) {
-          toast('Enter a task description');
-          return;
-        }
-
-        const due = tDue.value || null;
-        if (!due) {
-          toast('Due date is required');
-          return;
-        }
-
-        const priority = tPriority.value || 'Medium';
-
-        const checked = assigneesBox
-          ? Array.from(
-            assigneesBox.querySelectorAll<HTMLInputElement>(
-              'input[type="checkbox"]:checked',
-            ),
-          )
-          : [];
-
-        let assignee_ids = checked.map((c) => c.value);
-        let assignees = checked.map(
-          (c) => c.getAttribute('data-name') || c.value,
-        );
-
-        const isLeadForProject = isProjectLeadFor(project.id);
-
-        if (isAdmin()) {
-          // keep as-is
-        } else if (isLeadForProject) {
-          // keep as-is
-        } else {
-          // Designer / others: force self
-          assignee_ids = [currentUser.staff_id];
-          assignees = [currentUser.name || currentUser.staff_id];
-        }
-
-        const payload: any = {
-          project_id: project.id,
-          project_name: project.name,
-          stage_id: (tStage && tStage.value) || null,
-          sub_id: (tSub && tSub.value) || null,
-          task: title,
-          description: '',
-          due,
-          priority,
-          status: editingTask ? editingTask.status || 'Pending' : 'Pending',
-          assignee_ids,
-          assignees,
-        };
-
-        if (editingTask) {
-          let canEdit = false;
-          if (currentUser) {
-            if (isAdmin()) {
-              canEdit = true;
-            } else if (editingTask.created_by_id === currentUser.staff_id) {
-              canEdit = true;
-            } else {
-              const projForTask = projects.find(
-                (p) => p.id === editingTask.project_id,
-              );
-              if (projForTask && isProjectLeadFor(projForTask.id)) {
-                canEdit = true;
-              }
+          // Creation permission check: Admin or Lead for THIS project
+          if (!editingTask) {
+            if (!isAdmin() && !isProjectLeadFor(project.id)) {
+              toast('Only Admins or Project Leads can create tasks for this project.');
+              return;
             }
           }
 
-          if (!canEdit) {
-            toast('Only creator, Admin or project lead can edit this task');
+          const title = tDesc.value.trim();
+          if (!title) {
+            toast('Enter a task description');
             return;
           }
 
-          const { error } = await supabase
-            .from('tasks')
-            .update(payload)
-            .eq('id', editingTask.id);
-
-          if (error) {
-            console.error('Update task error', error);
-            toast('Failed to update task');
+          const due = tDue.value || null;
+          if (!due) {
+            toast('Due date is required');
             return;
           }
 
-          // Handle task assignment notifications
-          const oldAssignees = editingTask.assignee_ids || [];
-          const newAssignees = payload.assignee_ids || [];
-          if (JSON.stringify(oldAssignees) !== JSON.stringify(newAssignees)) {
-            await handleTaskAssignmentChange(editingTask, payload);
+          const priority = tPriority.value || 'Medium';
+
+          const checked = assigneesBox
+            ? Array.from(
+              assigneesBox.querySelectorAll<HTMLInputElement>(
+                'input[type="checkbox"]:checked',
+              ),
+            )
+            : [];
+
+          let assignee_ids = checked.map((c) => c.value);
+          let assignees = checked.map(
+            (c) => c.getAttribute('data-name') || c.value,
+          );
+
+          const isLeadForProject = isProjectLeadFor(project.id);
+
+          if (isAdmin()) {
+            // keep as-is
+          } else if (isLeadForProject) {
+            // keep as-is
+          } else {
+            // Designer / others: force self
+            assignee_ids = [currentUser.staff_id];
+            assignees = [currentUser.name || currentUser.staff_id];
           }
 
-          hideModal(taskModal);
-          editingTask = null;
-          toast('Task updated');
-        } else {
-          const { data: inserted, error } = await supabase.from('tasks').insert([
-            {
-              ...payload,
-              created_by_id: currentUser ? currentUser.staff_id : null,
-              created_by_name: currentUser ? currentUser.name : null,
-            },
-          ]).select().single();
+          const payload: any = {
+            project_id: project.id,
+            project_name: project.name,
+            stage_id: (tStage && tStage.value) || null,
+            sub_id: (tSub && tSub.value) || null,
+            task: title,
+            description: '',
+            due,
+            priority,
+            status: editingTask ? editingTask.status || 'Pending' : 'Pending',
+            assignee_ids,
+            assignees,
+          };
 
-          if (error) {
-            console.error('Create task error', error);
-            toast('Failed to create task');
-            return;
+          if (editingTask) {
+            let canEdit = false;
+            if (currentUser) {
+              if (isAdmin()) {
+                canEdit = true;
+              } else if (editingTask.created_by_id === currentUser.staff_id) {
+                canEdit = true;
+              } else {
+                const projForTask = projects.find(
+                  (p) => p.id === editingTask.project_id,
+                );
+                if (projForTask && isProjectLeadFor(projForTask.id)) {
+                  canEdit = true;
+                }
+              }
+            }
+
+            if (!canEdit) {
+              toast('Only creator, Admin or project lead can edit this task');
+              return;
+            }
+
+            const { error } = await supabase
+              .from('tasks')
+              .update(payload)
+              .eq('id', editingTask.id);
+
+            if (error) {
+              console.error('Update task error', error);
+              toast('Failed to update task');
+              return;
+            }
+
+            // Handle task assignment notifications
+            const oldAssignees = editingTask.assignee_ids || [];
+            const newAssignees = payload.assignee_ids || [];
+            if (JSON.stringify(oldAssignees) !== JSON.stringify(newAssignees)) {
+              await handleTaskAssignmentChange(editingTask, payload);
+            }
+
+            hideModal(taskModal);
+            editingTask = null;
+            toast('Task updated');
+          } else {
+            const { data: inserted, error } = await supabase.from('tasks').insert([
+              {
+                ...payload,
+                created_by_id: currentUser ? currentUser.staff_id : null,
+                created_by_name: currentUser ? currentUser.name : null,
+              },
+            ]).select().single();
+
+            if (error) {
+              console.error('Create task error', error);
+              toast('Failed to create task');
+              return;
+            }
+
+            // Handle task assignment notifications for new task
+            if (inserted && (payload.assignee_ids || []).length > 0) {
+              await handleTaskAssignmentChange(null, inserted);
+            }
+
+            hideModal(taskModal);
+            toast('Task created');
           }
 
-          // Handle task assignment notifications for new task
-          if (inserted && (payload.assignee_ids || []).length > 0) {
-            await handleTaskAssignmentChange(null, inserted);
-          }
-
-          hideModal(taskModal);
-          toast('Task created');
+          await loadDataAfterLogin();
+        } finally {
+          // Re-enable button
+          (taskOK as HTMLButtonElement).disabled = false;
         }
-
-        await loadDataAfterLogin();
       });
 
     // ---------- ADD USER MODAL ----------
