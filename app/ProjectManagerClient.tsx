@@ -4021,13 +4021,28 @@ export default function ProjectManagerClient() {
         return;
       }
 
+      const creationTs = task.created_at
+        ? new Date(task.created_at).toLocaleString()
+        : '';
+      const creator = task.created_by_name || task.created_by_id || 'Unknown';
+      const assignedTo = (task.assignees && task.assignees.length)
+        ? task.assignees.join(', ')
+        : (task.assignee_ids || []).join(', ');
+
+      const assignedEntry = `
+        <div class="history-item" style="background:#f9f9f9; border-bottom:1px solid #eee;">
+          <div class="small muted">${esc(creationTs)} — ${esc(creator)}</div>
+          <div><strong>Task Assigned</strong> to ${esc(assignedTo)}</div>
+        </div>
+      `;
+
       if (!data || data.length === 0) {
-        historyBody.innerHTML =
-          '<div class="small muted">No history yet for this task.</div>';
+        historyBody.innerHTML = assignedEntry +
+          '<div class="small muted" style="margin-top:10px">No status changes yet.</div>';
         return;
       }
 
-      historyBody.innerHTML = (data || [])
+      const logHtml = (data || [])
         .map((row: any) => {
           const ts = row.changed_at
             ? new Date(row.changed_at).toLocaleString()
@@ -4051,6 +4066,8 @@ export default function ProjectManagerClient() {
         `;
         })
         .join('');
+
+      historyBody.innerHTML = assignedEntry + logHtml;
     }
 
     historyClose &&
