@@ -2062,7 +2062,7 @@ export default function ProjectManagerClient() {
 
         try {
           // Hash the password with bcrypt
-          const bcrypt = await import('https://esm.sh/bcryptjs@2.4.3');
+          const bcrypt = await import('bcryptjs');
           const hashedPassword = await bcrypt.hash(newPassword, 10);
 
           const { error } = await supabase
@@ -2607,30 +2607,7 @@ export default function ProjectManagerClient() {
         });
       });
 
-      const zones = container.querySelectorAll<HTMLElement>('.kdrop');
 
-      zones.forEach((zone) => {
-        zone.addEventListener('dragover', (ev) => {
-          ev.preventDefault();
-          zone.classList.add('kdrop-hover');
-          if (ev.dataTransfer) ev.dataTransfer.dropEffect = 'move';
-        });
-
-        zone.addEventListener('dragleave', () => {
-          zone.classList.remove('kdrop-hover');
-        });
-
-        zone.addEventListener('drop', async (ev) => {
-          ev.preventDefault();
-          zone.classList.remove('kdrop-hover');
-
-          const taskId = ev.dataTransfer?.getData('text/plain');
-          const newStatus = zone.dataset.status;
-
-          if (!taskId || !newStatus) return;
-          await changeTaskStatusFromKanban(taskId, newStatus);
-        });
-      });
 
       updateKanbanCounts();
     }
@@ -2702,7 +2679,35 @@ export default function ProjectManagerClient() {
         const doneCards = container.querySelectorAll('#colDone .kcard').length;
         countDone.textContent = doneCards.toString();
       }
-    };
+    }
+
+    // Setup Kanban Drop Listeners (Run once on mount)
+    function setupKanbanListeners() {
+      const zones = container.querySelectorAll<HTMLElement>('.kdrop');
+      zones.forEach((zone) => {
+        zone.addEventListener('dragover', (ev) => {
+          ev.preventDefault();
+          zone.classList.add('kdrop-hover');
+          if (ev.dataTransfer) ev.dataTransfer.dropEffect = 'move';
+        });
+
+        zone.addEventListener('dragleave', () => {
+          zone.classList.remove('kdrop-hover');
+        });
+
+        zone.addEventListener('drop', async (ev) => {
+          ev.preventDefault();
+          zone.classList.remove('kdrop-hover');
+
+          const taskId = ev.dataTransfer?.getData('text/plain');
+          const newStatus = zone.dataset.status;
+
+          if (!taskId || !newStatus) return;
+          await changeTaskStatusFromKanban(taskId, newStatus);
+        });
+      });
+    }
+    setupKanbanListeners();
 
     // ---------- NOTIFICATION BELL HANDLING ----------
     const btnNotificationBell = el('btnNotificationBell');
@@ -4043,7 +4048,19 @@ export default function ProjectManagerClient() {
         return;
       }
 
-      const logHtml = (data || [])
+      const uniqueData = (data || []).filter((item, index, self) => {
+        if (index === 0) return true;
+        const prev = self[index - 1];
+        const t1 = new Date(item.changed_at).getTime();
+        const t2 = new Date(prev.changed_at).getTime();
+        const isSame = (item.action === prev.action) &&
+          (item.from_status === prev.from_status) &&
+          (item.to_status === prev.to_status) &&
+          (Math.abs(t1 - t2) < 2000);
+        return !isSame;
+      });
+
+      const logHtml = uniqueData
         .map((row: any) => {
           const ts = row.changed_at
             ? new Date(row.changed_at).toLocaleString()
