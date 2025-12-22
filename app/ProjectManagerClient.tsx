@@ -2816,6 +2816,23 @@ export default function ProjectManagerClient() {
               item.addEventListener('click', async () => {
                 const notifId = item.getAttribute('data-id');
                 const link = item.getAttribute('data-link');
+                const wasUnread = item.classList.contains('unread');
+
+                // Optimistic UI update - immediately mark as read visually
+                if (wasUnread) {
+                  item.classList.remove('unread');
+
+                  // Update badge count immediately
+                  if (notificationBadge) {
+                    const currentCount = parseInt(notificationBadge.textContent || '0', 10);
+                    const newCount = Math.max(0, currentCount - 1);
+                    if (newCount === 0) {
+                      notificationBadge.style.display = 'none';
+                    } else {
+                      notificationBadge.textContent = newCount.toString();
+                    }
+                  }
+                }
 
                 if (notifId) {
                   try {
@@ -2932,16 +2949,35 @@ export default function ProjectManagerClient() {
       markAllReadBtn.addEventListener('click', async () => {
         if (!currentUser) return;
 
+        // Optimistic UI update - immediately update badge and items
+        if (notificationBadge) {
+          notificationBadge.textContent = '0';
+          notificationBadge.style.display = 'none';
+        }
+
+        // Remove unread class from all items immediately
+        if (notificationList) {
+          notificationList.querySelectorAll('.notification-item.unread').forEach((item) => {
+            item.classList.remove('unread');
+          });
+        }
+
         try {
-          await fetch('/api/notifications/mark-all-read', {
+          const response = await fetch('/api/notifications/mark-all-read', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ userId: currentUser.staff_id }),
           });
 
-          await loadNotifications();
+          if (!response.ok) {
+            console.error('Mark all as read failed:', response.status);
+            // Reload to get actual state on error
+            await loadNotifications();
+          }
         } catch (error) {
           console.error('Mark all as read error:', error);
+          // Reload to get actual state on error
+          await loadNotifications();
         }
       });
 
