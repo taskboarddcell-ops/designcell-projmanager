@@ -15,6 +15,7 @@ export {
     createTask,
     updateTask,
     deleteTask,
+    bulkDeleteTasks,
     bulkAssignTasks,
     updateTaskStatus,
     canUserAssignTasks,

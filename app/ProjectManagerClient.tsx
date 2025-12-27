@@ -13,7 +13,7 @@ import {
   esc, formatDate, getProjectYear, isAdmin,
 
   // Task Handlers
-  createTask, updateTask, deleteTask, bulkAssignTasks,
+  createTask, updateTask, deleteTask, bulkDeleteTasks, bulkAssignTasks,
 
   // Project Handlers
   fetchProjects, sortProjectsByYear, filterProjectsByYear,
@@ -183,6 +183,9 @@ const staticHtml = `
               <input id="filterDateTo" class="input" type="date" placeholder="To" style="min-width:140px;">
             </div>
             <div class="spacer"></div>
+            <button id="btnBulkDelete" class="btn btn-danger" style="display:none;" title="Delete selected tasks (Admin only)">
+              Delete Selected (<span id="selectedCount">0</span>)
+            </button>
             <div id="projectContext" class="small muted"></div>
           </div>
 
@@ -192,6 +195,7 @@ const staticHtml = `
             <table>
               <thead>
                 <tr>
+                  <th style="width:40px;" id="selectAllHeader"><input type="checkbox" id="selectAllTasks" title="Select all tasks" style="cursor:pointer;"></th>
                   <th>Project</th>
                   <th>Task</th>
                   <th>Assignees</th>
@@ -2452,6 +2456,7 @@ export default function ProjectManagerClient() {
             .join('');
 
           tr.innerHTML = `
+          ${isAdmin() ? `<td style="text-align:center;"><input type="checkbox" class="task-checkbox" data-task-id="${esc(t.id)}" style="cursor:pointer;"></td>` : '<td></td>'}
           <td>${esc(t.project_name || '')}</td>
           <td>
             ${esc(t.task)}
@@ -4439,6 +4444,128 @@ export default function ProjectManagerClient() {
           })();
         }
       });
+
+    // ---------- BULK DELETE HANDLERS ----------
+    const selectAllCheckbox = el('selectAllTasks') as HTMLInputElement | null;
+    const bulkDeleteBtn = el('btnBulkDelete');
+    const selectedCountSpan = el('selectedCount');
+    const selectAllHeader = el('selectAllHeader');
+
+    // Hide/show select all checkbox based on admin status
+    if (selectAllHeader) {
+      selectAllHeader.style.display = isAdmin() ? '' : 'none';
+    }
+
+    // Update selected count and button visibility
+    function updateBulkDeleteUI() {
+      const checkboxes = document.querySelectorAll('.task-checkbox:checked');
+      const count = checkboxes.length;
+
+      if (selectedCountSpan) selectedCountSpan.textContent = count.toString();
+      if (bulkDeleteBtn) {
+        bulkDeleteBtn.style.display = isAdmin() && count > 0 ? 'inline-block' : 'none';
+      }
+    }
+
+    // Select all checkbox handler
+    selectAllCheckbox && selectAllCheckbox.addEventListener('change', (e) => {
+      const checked = (e.target as HTMLInputElement).checked;
+      const checkboxes = document.querySelectorAll('.task-checkbox') as NodeListOf<HTMLInputElement>;
+      checkboxes.forEach(cb => cb.checked = checked);
+      updateBulkDeleteUI();
+    });
+
+    // Individual checkbox handler (delegated)
+    tasksBody && tasksBody.addEventListener('change', (e) => {
+      const target = e.target as HTMLElement;
+      if (target.classList.contains('task-checkbox')) {
+        updateBulkDeleteUI();
+
+        // Update select all checkbox state
+        if (selectAllCheckbox) {
+          const allCheckboxes = document.querySelectorAll('.task-checkbox') as NodeListOf<HTMLInputElement>;
+          const checkedCheckboxes = document.querySelectorAll('.task-checkbox:checked');
+          selectAllCheckbox.checked = allCheckboxes.length > 0 && allCheckboxes.length === checkedCheckboxes.length;
+          selectAllCheckbox.indeterminate = checkedCheckboxes.length > 0 && checkedCheckboxes.length < allCheckboxes.length;
+        }
+      }
+    });
+
+    // Bulk delete button handler
+    bulkDeleteBtn && bulkDeleteBtn.addEventListener('click', async () => {
+      if (!isAdmin()) {
+        toast('Only admins can delete tasks');
+        return;
+      }
+
+      const checkedBoxes = document.querySelectorAll('.task-checkbox:checked') as NodeListOf<HTMLInputElement>;
+      const taskIds = Array.from(checkedBoxes).map(cb => cb.getAttribute('data-task-id')).filter(id => id) as string[];
+
+      if (taskIds.length === 0) {
+        toast('No tasks selected');
+        return;
+      }
+
+      // Get task details for confirmation
+      const selectedTasks = tasks.filter(t => taskIds.includes(t.id));
+      const taskList = selectedTasks.slice(0, 5).map(t => `• ${t.project_name} - ${t.task}`).join('\n');
+      const moreText = selectedTasks.length > 5 ? `\n... and ${selectedTasks.length - 5} more` : '';
+
+      const confirmMsg = `Are you sure you want to delete ${taskIds.length} task(s)?\n\n${taskList}${moreText}\n\n⚠️ This action cannot be undone.`;
+
+      if (!confirm(confirmMsg)) {
+        return;
+      }
+
+      // Show loading state
+      if (bulkDeleteBtn) {
+        bulkDeleteBtn.disabled = true;
+        bulkDeleteBtn.textContent = 'Deleting...';
+      }
+
+      try {
+        const result = await bulkDeleteTasks(supabase, taskIds);
+
+        if (result.deletedCount > 0) {
+          // Remove deleted tasks from local array
+          taskIds.forEach(id => {
+            const idx = tasks.findIndex(t => t.id === id);
+            if (idx !== -1) {
+              tasks.splice(idx, 1);
+            }
+          });
+
+          // Show result
+          if (result.failedCount === 0) {
+            toast(`Successfully deleted ${result.deletedCount} task(s)`);
+          } else {
+            toast(`Deleted ${result.deletedCount} task(s), ${result.failedCount} failed`);
+            console.error('Bulk delete errors:', result.errors);
+          }
+
+          // Re-render views
+          renderTasks();
+          renderKanban();
+
+          // Reset checkboxes
+          if (selectAllCheckbox) selectAllCheckbox.checked = false;
+          updateBulkDeleteUI();
+        } else {
+          toast('Failed to delete tasks: ' + (result.errors[0] || 'Unknown error'));
+        }
+      } catch (err: any) {
+        toast('Error during bulk delete: ' + (err.message || 'Unknown error'));
+        console.error('Bulk delete exception:', err);
+      } finally {
+        // Restore button state
+        if (bulkDeleteBtn) {
+          bulkDeleteBtn.disabled = false;
+          if (selectedCountSpan) {
+            bulkDeleteBtn.innerHTML = `Delete Selected (<span id="selectedCount">0</span>)`;
+          }
+        }
+      }
+    });
 
     // Reschedule
     resCancel &&

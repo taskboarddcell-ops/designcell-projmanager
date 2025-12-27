@@ -378,6 +378,57 @@ export async function deleteTask(
     }
 }
 
+/**
+ * Bulk delete multiple tasks (Admin only)
+ */
+export async function bulkDeleteTasks(
+    supabase: SupabaseClient,
+    taskIds: string[]
+): Promise<{ success: boolean; deletedCount: number; failedCount: number; errors: string[] }> {
+    logger.info('Bulk deleting tasks', { count: taskIds.length });
+
+    let deletedCount = 0;
+    let failedCount = 0;
+    const errors: string[] = [];
+
+    for (const taskId of taskIds) {
+        try {
+            // Delete related task status logs
+            await supabase
+                .from('task_status_log')
+                .delete()
+                .eq('task_id', taskId);
+
+            // Delete the task
+            const { error } = await supabase
+                .from('tasks')
+                .delete()
+                .eq('id', taskId);
+
+            if (error) {
+                logger.error('Failed to delete task in bulk operation', { taskId, error });
+                failedCount++;
+                errors.push(`Task ${taskId}: ${error.message}`);
+            } else {
+                deletedCount++;
+            }
+        } catch (err: any) {
+            logger.error('Exception during bulk delete', { taskId, err });
+            failedCount++;
+            errors.push(`Task ${taskId}: ${err.message || 'Unknown error'}`);
+        }
+    }
+
+    logger.info('Bulk delete complete', { deletedCount, failedCount });
+
+    return {
+        success: failedCount === 0,
+        deletedCount,
+        failedCount,
+        errors,
+    };
+}
+
 // ============ PERMISSION CHECKS ============
 
 /**
