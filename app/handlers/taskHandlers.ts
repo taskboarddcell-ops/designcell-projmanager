@@ -336,6 +336,48 @@ export async function updateTaskStatus(
     }
 }
 
+// ============ TASK DELETION ============
+
+/**
+ * Delete a task (Admin only)
+ */
+export async function deleteTask(
+    supabase: SupabaseClient,
+    taskId: string
+): Promise<{ success: boolean; error?: string }> {
+    logger.info('Deleting task', { taskId });
+
+    try {
+        // First delete related task status logs
+        const { error: logError } = await supabase
+            .from('task_status_log')
+            .delete()
+            .eq('task_id', taskId);
+
+        if (logError) {
+            logger.warn('Failed to delete task logs', logError);
+            // Continue anyway - logs are not critical
+        }
+
+        // Delete the task itself
+        const { error } = await supabase
+            .from('tasks')
+            .delete()
+            .eq('id', taskId);
+
+        if (error) {
+            logger.error('Task deletion failed', error);
+            return { success: false, error: error.message };
+        }
+
+        logger.info('Task deleted successfully');
+        return { success: true };
+    } catch (err: any) {
+        logger.error('Task deletion exception', err);
+        return { success: false, error: err.message || 'Unknown error' };
+    }
+}
+
 // ============ PERMISSION CHECKS ============
 
 /**

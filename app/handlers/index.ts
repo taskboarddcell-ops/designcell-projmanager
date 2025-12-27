@@ -14,6 +14,7 @@ export * from './types';
 export {
     createTask,
     updateTask,
+    deleteTask,
     bulkAssignTasks,
     updateTaskStatus,
     canUserAssignTasks,

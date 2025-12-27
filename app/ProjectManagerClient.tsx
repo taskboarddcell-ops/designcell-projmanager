@@ -13,7 +13,7 @@ import {
   esc, formatDate, getProjectYear, isAdmin,
 
   // Task Handlers
-  createTask, updateTask, bulkAssignTasks,
+  createTask, updateTask, deleteTask, bulkAssignTasks,
 
   // Project Handlers
   fetchProjects, sortProjectsByYear, filterProjectsByYear,
@@ -2476,6 +2476,7 @@ export default function ProjectManagerClient() {
             <button class="btn-sm act-complete" data-id="${esc(t.id)}">Done</button>
             <button class="btn-sm act-edit" data-id="${esc(t.id)}">Edit</button>
             <button class="btn-sm act-history" data-id="${esc(t.id)}">Log</button>
+            ${isAdmin() ? `<button class="btn-sm btn-danger act-delete" data-id="${esc(t.id)}" title="Delete task (Admin only)">Delete</button>` : ''}
           </td>
         `;
 
@@ -4405,6 +4406,37 @@ export default function ProjectManagerClient() {
         } else if (target.classList.contains('act-history')) {
           loadHistoryForTask(task);
           showModal(historyModal);
+        } else if (target.classList.contains('act-delete')) {
+          // Delete task - Admin only
+          if (!isAdmin()) {
+            toast('Only admins can delete tasks');
+            return;
+          }
+
+          // Confirm deletion
+          const confirmMsg = `Are you sure you want to delete this task?\n\nProject: ${task.project_name}\nTask: ${task.task}\n\nThis action cannot be undone.`;
+          if (!confirm(confirmMsg)) {
+            return;
+          }
+
+          // Delete the task
+          (async () => {
+            const result = await deleteTask(supabase, task.id);
+
+            if (result.success) {
+              toast('Task deleted successfully');
+              // Remove from local tasks array
+              const idx = tasks.findIndex((t) => t.id === task.id);
+              if (idx !== -1) {
+                tasks.splice(idx, 1);
+              }
+              // Re-render the task list
+              renderTasks();
+              renderKanban();
+            } else {
+              toast('Failed to delete task: ' + (result.error || 'Unknown error'));
+            }
+          })();
         }
       });
 
