@@ -2107,13 +2107,10 @@ export default function ProjectManagerClient() {
         }
 
         try {
-          // Hash the password with bcrypt
-          const bcrypt = await import('bcryptjs');
-          const hashedPassword = await bcrypt.hash(newPassword, 10);
-
+          // Update the passcode (stored as plain text 4-digit PIN)
           const { error } = await supabase
             .from('users')
-            .update({ password: hashedPassword })
+            .update({ passcode: newPassword })
             .eq('staff_id', currentResetUserId);
 
           if (error) {
