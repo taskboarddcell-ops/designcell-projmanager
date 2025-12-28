@@ -7,6 +7,32 @@ export function renderFirmWideReport(data: FullReportData): string {
   const { meta, metrics, narrative } = data;
   const chartData = prepareChartData(metrics);
 
+  // Dynamic Title Logic
+  let reportTitle = 'Firm-Wide Performance Report';
+  let reportSubtitle = 'Comprehensive analysis of all projects and team activities';
+
+  if (meta.reportType === 'individual' && meta.staffId) {
+    const staffName = metrics.byAssignee[meta.staffId]?.name || meta.staffId || 'Staff Member';
+    reportTitle = `Individual Performance Report: ${staffName}`;
+    reportSubtitle = 'Analysis of individual workload, efficiency, and task completion';
+  } else if (meta.reportType === 'project') {
+    if (meta.projectIds && meta.projectIds.length > 0) {
+      const names = Object.keys(metrics.byProject);
+      if (names.length === 1) {
+        reportTitle = `Project Report: ${names[0]}`;
+      } else if (names.length > 1 && names.length <= 3) {
+        reportTitle = `Project Report: ${names.join(', ')}`;
+      } else if (names.length > 3) {
+        reportTitle = `Multi-Project Performance Report (${names.length} projects)`;
+      } else {
+        reportTitle = 'Project Performance Report';
+      }
+    } else {
+      reportTitle = 'Project Performance Report';
+    }
+    reportSubtitle = 'Focused analysis of project progress and task status';
+  }
+
   // Group tasks by project
   const projectSections = Object.entries(metrics.byProject).map(([projectName, stats]) => {
     const projectTasks = [...metrics.topAgingTasks, ...metrics.topOverdueTasks, ...metrics.recentCompletions]
@@ -20,7 +46,7 @@ export function renderFirmWideReport(data: FullReportData): string {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Firm-Wide Report - ${meta.startDate} to ${meta.endDate}</title>
+  <title>${escapeHtml(reportTitle)} - ${meta.startDate} to ${meta.endDate}</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -543,8 +569,8 @@ export function renderFirmWideReport(data: FullReportData): string {
     
     <!-- Header -->
     <div class="report-header">
-      <h1 class="report-title">📊 Firm-Wide Performance Report</h1>
-      <p class="report-subtitle">Comprehensive analysis of all projects and team activities</p>
+      <h1 class="report-title">📊 ${escapeHtml(reportTitle)}</h1>
+      <p class="report-subtitle">${escapeHtml(reportSubtitle)}</p>
       <div class="report-meta">
         <div>
           <strong>Period:</strong> ${formatDate(meta.startDate)} - ${formatDate(meta.endDate)}
