@@ -13,7 +13,7 @@ export function renderFirmWideReport(data: FullReportData): string {
 
   if (meta.reportType === 'individual' && meta.staffId) {
     const staffName = metrics.byAssignee[meta.staffId]?.name || meta.staffId || 'Staff Member';
-    reportTitle = `Individual Performance Report: ${staffName}`;
+    reportTitle = `Individual Performance Report: ${staffName} (${meta.staffId})`;
     reportSubtitle = 'Analysis of individual workload, efficiency, and task completion';
   } else if (meta.reportType === 'project') {
     if (meta.projectIds && meta.projectIds.length > 0) {
@@ -800,7 +800,7 @@ export function renderFirmWideReport(data: FullReportData): string {
       .sort((a, b) => b.totalLoad - a.totalLoad)
       .map(assignee => `
           <tr>
-            <td><strong>${escapeHtml(assignee.name)}</strong></td>
+            <td><strong>${escapeHtml(assignee.name)} (${escapeHtml(assignee.staffId)})</strong></td>
             <td><span class="status-badge status-complete">${assignee.completed}</span></td>
             <td>${assignee.open}</td>
             <td class="${assignee.overdue > 0 ? 'priority-high' : ''}">${assignee.overdue}</td>

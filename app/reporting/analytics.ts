@@ -87,11 +87,14 @@ export function computeMetrics(
         ? cycleTimes.sort((a, b) => a - b)[Math.floor(cycleTimes.length / 2)]
         : 0;
 
-    // Helper to get staff names from IDs
+    // Helper to get staff names from IDs with staff ID included
     const getStaffNames = (staffIds: string[]): string[] => {
         return staffIds.map(id => {
             const profile = profiles.find(p => p.staff_id === id);
-            return profile?.name || id;
+            if (profile?.name) {
+                return `${profile.name} (${id})`;
+            }
+            return id;
         });
     };
 
