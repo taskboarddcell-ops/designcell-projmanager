@@ -1705,6 +1705,7 @@ export default function ProjectManagerClient() {
 
     // ---------- USER MANAGEMENT ----------
     const userManagementEntry = el('userManagementEntry');
+    const reportsEntry = el('reportsEntry');
     const userManagementModal = el('userManagementModal');
     const userManagementList = el('userManagementList');
     const userSearchInput = el('userSearchInput') as HTMLInputElement | null;
@@ -2053,6 +2054,11 @@ export default function ProjectManagerClient() {
 
     userManagementEntry &&
       userManagementEntry.addEventListener('click', openUserManagement);
+
+    reportsEntry &&
+      reportsEntry.addEventListener('click', () => {
+        window.location.href = '/reports';
+      });
 
     userManagementClose &&
       userManagementClose.addEventListener('click', () => {
@@ -5565,6 +5571,7 @@ export default function ProjectManagerClient() {
         btnAddUser.style.display = 'none';
         btnNewTask.style.display = 'none';
         if (userManagementEntry) userManagementEntry.style.display = 'none';
+        if (reportsEntry) reportsEntry.style.display = 'none';
         return;
       }
 
@@ -5573,11 +5580,13 @@ export default function ProjectManagerClient() {
         btnAddUser.style.display = '';
         btnNewTask.style.display = '';
         if (userManagementEntry) userManagementEntry.style.display = '';
+        if (reportsEntry) reportsEntry.style.display = '';
       } else {
         btnNewProject.style.display = 'none';
         btnAddUser.style.display = 'none';
         btnNewTask.style.display = userIsLeadAnywhere() ? '' : 'none';
         if (userManagementEntry) userManagementEntry.style.display = 'none';
+        if (reportsEntry) reportsEntry.style.display = 'none';
       }
     }
 

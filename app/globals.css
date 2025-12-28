@@ -56,7 +56,10 @@ body {
 .app {
   display: grid;
   grid-template-columns: 280px 1fr;
-  height: 100%;
+  height: 100vh;
+  /* Use viewport height for proper scrolling */
+  overflow: hidden;
+  /* Prevent body scroll */
 }
 
 /* ===== Sidebar ===== */
@@ -212,8 +215,10 @@ body {
   border: 2px solid var(--line-hair);
   background: #fff;
   border-radius: var(--radius-0);
-  overflow: hidden;
-  /* keep list within box */
+  overflow-y: auto;
+  /* Enable vertical scrolling */
+  max-height: calc(100vh - 400px);
+  /* Fixed height for independent scrolling */
 }
 
 .proj-item {
@@ -278,6 +283,8 @@ body {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  height: 100vh;
+  /* Full viewport height */
 }
 
 .topbar {
@@ -288,6 +295,8 @@ body {
   align-items: center;
   gap: 12px;
   justify-content: space-between;
+  flex-shrink: 0;
+  /* Don't shrink */
 }
 
 .tabs {
@@ -316,7 +325,12 @@ body {
 
 .content {
   padding: 16px;
-  overflow: auto;
+  overflow-y: auto;
+  /* Enable vertical scrolling */
+  flex: 1 1 auto;
+  /* Take remaining space */
+  min-height: 0;
+  /* Allow flex shrinking */
 }
 
 /* ===== Outer card frame ===== */
