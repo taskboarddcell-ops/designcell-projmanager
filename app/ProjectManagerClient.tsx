@@ -130,6 +130,14 @@ const staticHtml = `
             </svg>
             Task List
           </button>
+
+          <!-- Workload tab (fourth, admin only) -->
+          <button id="tabWorkload" class="tab" aria-selected="false" style="display:none;">
+            <svg xmlns="http://www.w3.org/2000/svg" height="20" width="20" class="tab-icon" viewBox="0 -960 960 960">
+              <path d="M480-80q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-80q134 0 227-93t93-227q0-134-93-227t-227-93q-134 0-227 93t-93 227q0 134 93 227t227 93Zm0-240q-33 0-56.5-23.5T400-480q0-33 23.5-56.5T480-560q33 0 56.5 23.5T560-480q0 33-23.5 56.5T480-400Zm-240 0q-33 0-56.5-23.5T160-480q0-33 23.5-56.5T240-560q33 0 56.5 23.5T320-480q0 33-23.5 56.5T240-400Zm480 0q-33 0-56.5-23.5T640-480q0-33 23.5-56.5T720-560q33 0 56.5 23.5T800-480q0 33-23.5 56.5T720-400Z"/>
+            </svg>
+            Workload Analysis
+          </button>
         </div>
 
         <div class="topbar-right" style="display:flex;align-items:center;gap:8px;">
@@ -301,6 +309,20 @@ const staticHtml = `
           </div>
           <div id="projectInfoCard" style="display:none;margin-bottom:16px;"></div>
           <div id="stagesBox"></div>
+        </section>
+
+        <!-- Workload Analysis -->
+        <section id="viewWorkload" class="card" style="display:none">
+          <div id="workloadHeader" style="margin-bottom:20px;">
+            <h2 style="margin:0;font-size:18px;color:var(--accent);">Smart Workload Analysis</h2>
+            <p class="small muted">Workload distribution and performance metrics for all employees.</p>
+          </div>
+          <div id="workloadContent" class="workload-dashboard">
+            <!-- Dynamically populated -->
+            <div class="loading-state" style="padding:40px;text-align:center;color:var(--muted);">
+              Gathering data and analyzing workload...
+            </div>
+          </div>
         </section>
       </div>
     </main>
@@ -1944,11 +1966,14 @@ export default function ProjectManagerClient() {
     const tabTasks = el('tabTasks');
     const tabKanban = el('tabKanban');
     const tabStages = el('tabStages');
+    const tabWorkload = el('tabWorkload');
+    const viewWorkload = el('viewWorkload');
+    const workloadContent = el('workloadContent');
     const viewTasks = el('viewTasks');
     const viewKanban = el('viewKanban');
     const viewStages = el('viewStages');
 
-    function selectTab(which: 'tasks' | 'kanban' | 'stages') {
+    function selectTab(which: 'tasks' | 'kanban' | 'stages' | 'workload') {
       const map: Record<
         string,
         { tab: HTMLElement | null; view: HTMLElement | null }
@@ -1956,6 +1981,7 @@ export default function ProjectManagerClient() {
         tasks: { tab: tabTasks, view: viewTasks },
         kanban: { tab: tabKanban, view: viewKanban },
         stages: { tab: tabStages, view: viewStages },
+        workload: { tab: tabWorkload, view: viewWorkload },
       };
 
       Object.entries(map).forEach(([key, pair]) => {
@@ -1970,11 +1996,13 @@ export default function ProjectManagerClient() {
       if (which === 'kanban') renderKanban();
       if (which === 'tasks') renderTasks();
       if (which === 'stages') renderProjectStructure();
+      if (which === 'workload') renderWorkloadAnalysis();
     }
 
     tabTasks && tabTasks.addEventListener('click', () => selectTab('tasks'));
     tabKanban && tabKanban.addEventListener('click', () => selectTab('kanban'));
     tabStages && tabStages.addEventListener('click', () => selectTab('stages'));
+    tabWorkload && tabWorkload.addEventListener('click', () => selectTab('workload'));
 
     // ---------- FILTERS ----------
     const filterAssignee = el('filterAssignee') as HTMLSelectElement | null;
@@ -2725,6 +2753,167 @@ export default function ProjectManagerClient() {
           kbFilterAssignee.value = currentKbFilterVal;
         }
       }
+    }
+
+    // ---------- SMART WORKLOAD ANALYSIS ----------
+    function renderWorkloadAnalysis() {
+      if (!workloadContent) return;
+      workloadContent.innerHTML = '';
+
+      if (!isAdmin()) {
+        workloadContent.innerHTML = `<div style="padding:40px;text-align:center;color:#ef4444;font-weight:600;">Access Denied: Only Admins can view workload analysis.</div>`;
+        return;
+      }
+
+      // 1. Calculate stats by employee
+      const empStats: Record<string, any> = {};
+
+      // Initialize with all users
+      allUsers.forEach(u => {
+        if (u.status === 'deactivated') return;
+        empStats[u.name || u.staff_id] = {
+          name: u.name || u.staff_id,
+          level: u.level || 'Staff',
+          totalTasks: 0,
+          pending: 0,
+          inProgress: 0,
+          revision: 0,
+          complete: 0,
+          highPrio: 0,
+          overdue: 0,
+          projects: new Set()
+        };
+      });
+
+      // Aggregate task data
+      const now = new Date();
+      tasks.forEach(task => {
+        const assignees = task.assignees || [];
+        assignees.forEach((name: string) => {
+          if (!empStats[name]) {
+            // Fallback for names not in users list
+            empStats[name] = {
+              name: name,
+              level: 'Member',
+              totalTasks: 0,
+              pending: 0,
+              inProgress: 0,
+              revision: 0,
+              complete: 0,
+              highPrio: 0,
+              overdue: 0,
+              projects: new Set()
+            };
+          }
+
+          const stats = empStats[name];
+          stats.totalTasks++;
+
+          if (task.status === 'Complete') stats.complete++;
+          else if (task.status === 'In Progress') stats.inProgress++;
+          else if (task.status === 'Needs Revision') stats.revision++;
+          else stats.pending++;
+
+          if (task.priority === 'High') stats.highPrio++;
+
+          if (task.status !== 'Complete' && task.due && new Date(task.due) < now) {
+            stats.overdue++;
+          }
+
+          if (task.project_id) stats.projects.add(task.project_id);
+        });
+      });
+
+      // Calculate aggregate data for top cards
+      const activeTasksList = tasks.filter(t => t.status !== 'Complete');
+      const allActiveTasks = activeTasksList.length;
+      const totalCapacity = allUsers.filter(u => u.status !== 'deactivated').length * 10; // Simple baseline
+      const workloadPercentage = totalCapacity > 0 ? Math.round((allActiveTasks / totalCapacity) * 100) : 0;
+
+      // 2. Render Top Summary Cards
+      const summaryHtml = `
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-value">${allActiveTasks}</div>
+            <div class="stat-label">Total Active Tasks</div>
+          </div>
+          <div class="stat-card" style="border-left-color: ${workloadPercentage > 81 ? '#ef4444' : '#10b981'};">
+            <div class="stat-value">${workloadPercentage}%</div>
+            <div class="stat-label">Studio Capacity Load</div>
+          </div>
+          <div class="stat-card" style="border-left-color: #f59e0b;">
+            <div class="stat-value">${tasks.filter(t => t.status !== 'Complete' && t.due && new Date(t.due) < now).length}</div>
+            <div class="stat-label">Overdue Tasks</div>
+          </div>
+          <div class="stat-card" style="border-left-color: #3b82f6;">
+            <div class="stat-value">${projects.filter(p => !p.project_status || p.project_status === 'Ongoing' || p.project_status === 'Active').length}</div>
+            <div class="stat-label">Active Projects</div>
+          </div>
+        </div>
+      `;
+
+      // 3. Render Employee Cards
+      const employeeGrid = document.createElement('div');
+      employeeGrid.className = 'employee-workload-grid';
+
+      Object.values(empStats)
+        .sort((a: any, b: any) => (b.inProgress + b.pending + b.revision) - (a.inProgress + a.pending + a.revision))
+        .forEach((stats: any) => {
+          const activeCount = stats.inProgress + stats.pending + stats.revision;
+          // Heuristic for load score
+          const loadScore = (activeCount * 1.5) + (stats.highPrio * 2) + (stats.overdue * 3);
+          const loadStatus = loadScore > 15 ? 'High' : loadScore > 8 ? 'Moderate' : 'Optimal';
+          const loadClass = loadScore > 15 ? 'load-high' : loadScore > 8 ? 'load-med' : 'load-low';
+          const loadWidth = Math.min((loadScore / 25) * 100, 100);
+
+          const card = document.createElement('div');
+          card.className = 'workload-card';
+          card.innerHTML = `
+            <div class="workload-card-header">
+              <div class="emp-name">${esc(stats.name)}</div>
+              <div class="emp-level">${esc(stats.level)}</div>
+            </div>
+            <div class="workload-card-body">
+              <div class="workload-metric">
+                <div class="metric-header">
+                  <span>Capacity: <strong>${loadStatus}</strong></span>
+                  <span>${activeCount} Active Tasks</span>
+                </div>
+                <div class="progress-bar-bg">
+                  <div class="progress-bar-fill ${loadClass}" style="width: ${loadWidth}%"></div>
+                </div>
+              </div>
+
+              <div class="status-pills">
+                <div class="status-pill pill-pending">Pending: ${stats.pending}</div>
+                <div class="status-pill pill-progress">Progress: ${stats.inProgress}</div>
+                <div class="status-pill pill-revision">Revision: ${stats.revision}</div>
+                <div class="status-pill pill-complete">Completed: ${stats.complete}</div>
+              </div>
+
+              <div style="margin-top:16px; display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+                 <div style="background:#f8fafc; padding:8px; border-radius:4px; text-align:center;">
+                    <div style="font-size:16px; font-weight:800; color:#ef4444;">${stats.overdue}</div>
+                    <div style="font-size:9px; text-transform:uppercase; color:var(--muted); font-weight:700;">Overdue</div>
+                 </div>
+                 <div style="background:#f8fafc; padding:8px; border-radius:4px; text-align:center;">
+                    <div style="font-size:16px; font-weight:800; color:#3b82f6;">${stats.projects.size}</div>
+                    <div style="font-size:9px; text-transform:uppercase; color:var(--muted); font-weight:700;">Active Proj</div>
+                 </div>
+              </div>
+            </div>
+            <div class="workload-card-footer">
+              <svg xmlns="http://www.w3.org/2000/svg" height="12" width="12" viewBox="0 -960 960 960" fill="currentColor" style="vertical-align:middle;margin-right:2px;">
+                <path d="M480-280q17 0 28.5-11.5T520-320q0-17-11.5-28.5T480-360q-17 0-28.5 11.5T440-320q0 17 11.5 28.5T480-280Zm-40-160h80v-240h-80v240Zm40 360q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-80q134 0 227-93t93-227q0-134-93-227t-227-93q-134 0-227 93t-93 227q0 134 93 227t227 93Zm0-320Z"/>
+              </svg>
+              ${stats.highPrio} high-priority tasks in queue
+            </div>
+          `;
+          employeeGrid.appendChild(card);
+        });
+
+      workloadContent.innerHTML = summaryHtml;
+      workloadContent.appendChild(employeeGrid);
     }
 
     // ---------- RENDER TASK TABLE ----------
@@ -6162,6 +6351,7 @@ export default function ProjectManagerClient() {
         btnNewTask.style.display = 'none';
         if (userManagementEntry) userManagementEntry.style.display = 'none';
         if (reportsEntry) reportsEntry.style.display = 'none';
+        if (tabWorkload) tabWorkload.style.display = 'none';
         return;
       }
 
@@ -6171,12 +6361,16 @@ export default function ProjectManagerClient() {
         btnNewTask.style.display = '';
         if (userManagementEntry) userManagementEntry.style.display = '';
         if (reportsEntry) reportsEntry.style.display = '';
+        if (tabWorkload) tabWorkload.style.display = ''; // Tab style is handled by CSS, display:'' restores default (which is usually inline-block or whatever the class defines)
+        // Ensure it's visible if admin
+        if (tabWorkload) tabWorkload.style.display = 'flex';
       } else {
         btnNewProject.style.display = 'none';
         btnAddUser.style.display = 'none';
         btnNewTask.style.display = userIsLeadAnywhere() ? '' : 'none';
         if (userManagementEntry) userManagementEntry.style.display = 'none';
         if (reportsEntry) reportsEntry.style.display = 'none';
+        if (tabWorkload) tabWorkload.style.display = 'none';
       }
     }
 
