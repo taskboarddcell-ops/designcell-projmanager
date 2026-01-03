@@ -3185,7 +3185,7 @@ export default function ProjectManagerClient() {
             .join('');
 
           tr.innerHTML = `
-          ${isAdmin() ? `<td style="text-align:center;"><input type="checkbox" class="task-checkbox" data-task-id="${esc(t.id)}" style="cursor:pointer;"></td>` : '<td></td>'}
+          ${isAdmin() ? `<td style="text-align:center;"><input type="checkbox" class="task-checkbox" data-task-id="${esc(t.id)}" style="cursor:pointer;"></td>` : ''}
           <td>${esc(t.project_name || '')}</td>
           <td>
             ${esc(t.task)}
@@ -5267,10 +5267,7 @@ export default function ProjectManagerClient() {
     const selectedCountSpan = el('selectedCount');
     const selectAllHeader = el('selectAllHeader');
 
-    // Hide/show select all checkbox based on admin status
-    if (selectAllHeader) {
-      selectAllHeader.style.display = isAdmin() ? '' : 'none';
-    }
+
 
     // Update selected count and button visibility
     function updateBulkDeleteUI() {
@@ -6553,6 +6550,8 @@ export default function ProjectManagerClient() {
     function refreshRoleUI() {
       if (!btnNewProject || !btnAddUser || !btnNewTask) return;
 
+      const selectAllHeader = el('selectAllHeader');
+
       if (!currentUser) {
         btnNewProject.style.display = 'none';
         btnAddUser.style.display = 'none';
@@ -6560,6 +6559,7 @@ export default function ProjectManagerClient() {
         if (userManagementEntry) userManagementEntry.style.display = 'none';
         if (reportsEntry) reportsEntry.style.display = 'none';
         if (tabWorkload) tabWorkload.style.display = 'none';
+        if (selectAllHeader) selectAllHeader.style.display = 'none';
         return;
       }
 
@@ -6569,9 +6569,9 @@ export default function ProjectManagerClient() {
         btnNewTask.style.display = '';
         if (userManagementEntry) userManagementEntry.style.display = '';
         if (reportsEntry) reportsEntry.style.display = '';
-        if (tabWorkload) tabWorkload.style.display = ''; // Tab style is handled by CSS, display:'' restores default (which is usually inline-block or whatever the class defines)
-        // Ensure it's visible if admin
+        if (tabWorkload) tabWorkload.style.display = '';
         if (tabWorkload) tabWorkload.style.display = 'flex';
+        if (selectAllHeader) selectAllHeader.style.display = '';
       } else {
         btnNewProject.style.display = 'none';
         btnAddUser.style.display = 'none';
@@ -6579,6 +6579,7 @@ export default function ProjectManagerClient() {
         if (userManagementEntry) userManagementEntry.style.display = 'none';
         if (reportsEntry) reportsEntry.style.display = 'none';
         if (tabWorkload) tabWorkload.style.display = 'none';
+        if (selectAllHeader) selectAllHeader.style.display = 'none';
       }
     }
 
