@@ -303,7 +303,8 @@ export async function updateTaskStatus(
     taskId: string,
     newStatus: string,
     remarks?: string,
-    completedBy?: string
+    completedBy?: string,
+    reviewComments?: string
 ): Promise<{ success: boolean; error?: string }> {
     logger.info('Updating task status', { taskId, newStatus });
 
@@ -315,6 +316,10 @@ export async function updateTaskStatus(
         if (remarks) updateData.completion_remarks = remarks;
     } else if (newStatus === 'Pending' && remarks) {
         updateData.reschedule_remarks = remarks;
+    } else if (newStatus === 'Needs Revision' && reviewComments) {
+        updateData.review_comments = reviewComments;
+    } else if (newStatus === 'Under Review' && remarks) {
+        updateData.completion_remarks = remarks; // Use completion_remarks for submission note
     }
 
     try {

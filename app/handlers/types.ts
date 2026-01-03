@@ -46,14 +46,17 @@ export interface Task {
     description?: string;
     due: string;
     priority: 'High' | 'Medium' | 'Low';
-    status: 'Pending' | 'In Progress' | 'Complete';
+    status: 'Pending' | 'In Progress' | 'Needs Revision' | 'Rejected' | 'Complete';
     assignee_ids: string[];
     assignees: string[];
     current_status?: string;
     completed_at?: string;
     completed_by?: string;
+    reviewed_by?: string;
+    reviewed_at?: string;
     reschedule_remarks?: string;
     completion_remarks?: string;
+    review_comments?: string;
     created_at?: string;
     created_by_id?: string;
     created_by_name?: string;
