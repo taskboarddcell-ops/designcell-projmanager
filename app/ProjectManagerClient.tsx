@@ -313,22 +313,22 @@ const staticHtml = `
 
         <!-- Workload Analysis -->
         <section id="viewWorkload" class="card" style="display:none">
-          <div id="workloadHeader" style="margin-bottom:20px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
-            <div style="flex: 1; min-width: 200px;">
-              <h2 style="margin:0;font-size:18px;color:var(--accent);">Smart Workload Analysis</h2>
-              <p class="small muted" style="margin:0;">Workload distribution and performance metrics for all employees.</p>
+          <div id="workloadHeader" style="margin-bottom:24px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:20px;">
+            <div style="flex: 1; min-width: 250px;">
+              <h2 style="margin:0;font-size:20px;color:var(--accent);">Smart Workload Analysis</h2>
+              <p class="small muted" style="margin:0; margin-top:2px;">Workload distribution and performance metrics for all employees.</p>
             </div>
-            <div style="display:flex; gap:16px; align-items:center; flex-shrink: 0; flex-wrap: wrap;">
+            <div style="display:flex; gap:12px; align-items:center; flex-shrink: 0; flex-wrap: wrap;">
               <div class="search-wrap" style="width:240px; margin:0; flex-shrink: 0;">
-                <span class="icon">
+                <span class="icon" style="top:50%; transform:translateY(-50%);">
                   <svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 -960 960 960" width="20px" fill="var(--muted)">
                     <path d="M784-120 532-372q-30 24-69 38t-83 14q-109 0-184.5-75.5T120-580q0-109 75.5-184.5T380-840q109 0 184.5 75.5T640-580q0 44-14 83t-38 69l252 252-56 56ZM380-400q75 0 127.5-52.5T560-580q0-75-52.5-127.5T380-760q-75 0-127.5 52.5T200-580q0 75 52.5 127.5T380-400Z"/>
                   </svg>
                 </span>
-                <input id="workloadSearch" type="text" placeholder="Search workers..." autocomplete="off" style="padding: 8px 8px 8px 36px; border: 2px solid var(--line-hair); border-radius: 4px;">
+                <input id="workloadSearch" type="text" placeholder="Search workers..." autocomplete="off" style="width:100%; padding: 8px 8px 8px 36px; border: 2px solid var(--line-hair); border-radius: 4px; height:40px;">
               </div>
               <div style="flex-shrink: 0;">
-                <select id="workloadSort" class="select" style="width:180px; margin:0; height: 40px;">
+                <select id="workloadSort" class="select" style="width:180px; margin:0; height: 40px; display:block;">
                   <option value="load">Highest Load Score</option>
                   <option value="tasks">Most Active Tasks</option>
                   <option value="overdue">Most Overdue</option>
