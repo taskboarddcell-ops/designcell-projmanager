@@ -2813,7 +2813,7 @@ export default function ProjectManagerClient() {
           <td>${assigneesHtml}</td>
           <td>
             ${t.status === 'Complete'
-              ? `<div>Due: ${esc(dueStr)}</div><div class="small" style="color:#10b981;">Done: ${esc(formatDate(t.completed_at || ''))}</div>`
+              ? `<div>Due: ${esc(dueStr)}</div><div class="small" style="color:#10b981;">Completed on: ${esc(formatDate(t.completed_at || ''))}</div>`
               : esc(dueStr)
             }
           </td>
@@ -2936,7 +2936,7 @@ export default function ProjectManagerClient() {
                   <path d="M200-80q-33 0-56.5-23.5T120-160v-560q0-33 23.5-56.5T200-840h40v-80h80v80h320v-80h80v80h40q33 0 56.5 23.5T840-720v560q0 33-23.5 56.5T760-80H200Zm0-80h560v-400H200v400Zm0-480h560v-80H200v80Zm0 0v-80 80Z"/>
                 </svg>
                 ${t.status === 'Complete'
-            ? `Due: ${esc(dueStr)} | Done: ${esc(formatDate(t.completed_at || ''))}`
+            ? `Due: ${esc(dueStr)} | Completed on: ${esc(formatDate(t.completed_at || ''))}`
             : esc(dueStr)
           }
               </span>
