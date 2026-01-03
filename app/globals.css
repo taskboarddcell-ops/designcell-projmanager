@@ -1913,3 +1913,44 @@ tr.needs-revision {
   font-size: 11px;
   color: var(--muted);
 }
+
+/* ===== Workload Detail Modal ===== */
+#wdAvatar {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  border: 2px solid white;
+}
+
+#wdTaskGroupList .card {
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+#wdTaskGroupList .card:hover {
+  border-color: var(--accent);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+}
+
+.wd-task-row {
+  transition: background 0.2s;
+  padding: 8px;
+  border-radius: 4px;
+}
+
+.wd-task-row:hover {
+  background: #f8fafc;
+}
+
+@keyframes wdSlideUp {
+  from {
+    transform: translateY(15px);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+#wdBody>div {
+  animation: wdSlideUp 0.4s ease-out forwards;
+}

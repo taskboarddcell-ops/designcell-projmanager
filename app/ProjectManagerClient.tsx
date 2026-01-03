@@ -682,7 +682,6 @@ const staticHtml = `
               <label class="small"><input type="checkbox" value="Pending" checked> Pending</label>
               <label class="small"><input type="checkbox" value="In Progress" checked> In Progress</label>
               <label class="small"><input type="checkbox" value="Needs Revision" checked> Needs Revision</label>
-              <label class="small"><input type="checkbox" value="Rejected" checked> Rejected</label>
               <label class="small"><input type="checkbox" value="Complete" checked> Completed</label>
             </div>
           </div>
@@ -726,7 +725,40 @@ const staticHtml = `
       </div>
     </div>
   </div>
-  
+
+  <!-- WORKLOAD DETAIL MODAL -->
+  <div id="workloadDetailModal" class="modal">
+    <div class="mc" style="max-width:850px; width:95%; max-height:85vh; display:flex; flex-direction:column; padding:0; overflow:hidden;">
+      <div id="wdHeader" style="padding:20px; border-bottom:1px solid var(--line-hair); background:#f8fafc; display:flex; justify-content:space-between; align-items:center;">
+        <div style="display:flex; align-items:center; gap:16px;">
+          <div id="wdAvatar" style="width:48px; height:48px; background:var(--accent); color:white; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:20px;">?</div>
+          <div>
+            <h3 id="wdName" style="margin:0; font-size:20px; color:var(--accent);">Worker Name</h3>
+            <div id="wdLevel" style="font-size:12px; color:var(--muted); margin-top:2px;">Position Info</div>
+          </div>
+        </div>
+        <button id="wdClose" class="btn" style="border:none; background:transparent; font-size:24px; cursor:pointer; color:var(--muted);">&times;</button>
+      </div>
+
+      <div id="wdBody" style="flex:1; overflow-y:auto; padding:24px;">
+        <div id="wdSummary" class="stats-grid" style="margin-bottom:32px;">
+          <!-- Metrics injected here -->
+        </div>
+
+        <div style="margin-bottom:16px;">
+          <h4 style="margin:0 0 16px 0; font-size:13px; text-transform:uppercase; letter-spacing:0.8px; color:var(--muted); font-weight:700;">Task Breakdown & Assignment Details</h4>
+          <div id="wdTaskGroupList" style="display:flex; flex-direction:column; gap:20px;">
+            <!-- Grouped tasks injected here -->
+          </div>
+        </div>
+      </div>
+      
+      <div style="padding:16px 24px; background:#f8fafc; border-top:1px solid var(--line-hair); display:flex; justify-content:flex-end;">
+        <button id="wdCloseBtn" class="btn">Close Analysis</button>
+      </div>
+    </div>
+  </div>
+
   <!-- BULK ASSIGN TASKS (still present but optional) -->
   <div id="bulkModal" class="modal">
     <div class="mc">
@@ -2902,18 +2934,128 @@ export default function ProjectManagerClient() {
                  </div>
               </div>
             </div>
-            <div class="workload-card-footer">
-              <svg xmlns="http://www.w3.org/2000/svg" height="12" width="12" viewBox="0 -960 960 960" fill="currentColor" style="vertical-align:middle;margin-right:2px;">
-                <path d="M480-280q17 0 28.5-11.5T520-320q0-17-11.5-28.5T480-360q-17 0-28.5 11.5T440-320q0 17 11.5 28.5T480-280Zm-40-160h80v-240h-80v240Zm40 360q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-80q134 0 227-93t93-227q0-134-93-227t-227-93q-134 0-227 93t-93 227q0 134 93 227t227 93Zm0-320Z"/>
-              </svg>
-              ${stats.highPrio} high-priority tasks in queue
+            <div class="workload-card-footer" style="display:flex; justify-content:space-between; align-items:center;">
+              <div style="display:flex; align-items:center;">
+                <svg xmlns="http://www.w3.org/2000/svg" height="12" width="12" viewBox="0 -960 960 960" fill="currentColor" style="vertical-align:middle;margin-right:2px;">
+                  <path d="M480-280q17 0 28.5-11.5T520-320q0-17-11.5-28.5T480-360q-17 0-28.5 11.5T440-320q0 17 11.5 28.5T480-280Zm-40-160h80v-240h-80v240Zm40 360q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-80q134 0 227-93t93-227q0-134-93-227t-227-93q-134 0-227 93t-93 227q0 134 93 227t227 93Zm0-320Z"/>
+                </svg>
+                ${stats.highPrio} high priority
+              </div>
+              <div style="text-decoration:underline; font-weight:700; color:var(--accent);">View Details &rarr;</div>
             </div>
           `;
+          card.style.cursor = 'pointer';
+          card.onclick = () => openWorkloadDetailModal(stats.name);
           employeeGrid.appendChild(card);
         });
 
       workloadContent.innerHTML = summaryHtml;
       workloadContent.appendChild(employeeGrid);
+    }
+
+    function openWorkloadDetailModal(name: string) {
+      if (!workloadDetailModal) return;
+
+      const stats = calculateIndividualStats(name);
+      renderWorkloadDetails(stats);
+      showModal(workloadDetailModal);
+    }
+
+    function calculateIndividualStats(name: string) {
+      const user = allUsers.find(u => u.name === name || u.staff_id === name);
+      const userTasks = tasks.filter(t => (t.assignees || []).includes(name));
+      const now = new Date();
+
+      const stats = {
+        name: name,
+        level: user?.level || 'Staff',
+        total: userTasks.length,
+        pending: userTasks.filter(t => t.status === 'Pending' || !t.status).length,
+        inProgress: userTasks.filter(t => t.status === 'In Progress').length,
+        revision: userTasks.filter(t => t.status === 'Needs Revision').length,
+        complete: userTasks.filter(t => t.status === 'Complete').length,
+        overdue: userTasks.filter(t => t.status !== 'Complete' && t.due && new Date(t.due) < now).length,
+        highPrio: userTasks.filter(t => t.priority === 'High' && t.status !== 'Complete').length,
+        tasksByProject: {} as Record<string, any[]>
+      };
+
+      userTasks.forEach(t => {
+        const pName = t.project_name || 'Unassigned';
+        if (!stats.tasksByProject[pName]) stats.tasksByProject[pName] = [];
+        stats.tasksByProject[pName].push(t);
+      });
+
+      return stats;
+    }
+
+    function renderWorkloadDetails(stats: any) {
+      if (!wdName || !wdLevel || !wdAvatar || !wdSummary || !wdTaskGroupList) return;
+
+      wdName.textContent = stats.name;
+      wdLevel.textContent = stats.level;
+      wdAvatar.textContent = stats.name.charAt(0).toUpperCase();
+
+      const activeCount = stats.pending + stats.inProgress + stats.revision;
+      const completionRate = stats.total > 0 ? Math.round((stats.complete / stats.total) * 100) : 0;
+
+      wdSummary.innerHTML = `
+        <div class="stat-card">
+          <div class="stat-value">${activeCount}</div>
+          <div class="stat-label">Active Tasks</div>
+        </div>
+        <div class="stat-card" style="border-left-color:#ef4444;">
+          <div class="stat-value">${stats.overdue}</div>
+          <div class="stat-label">Overdue Items</div>
+        </div>
+        <div class="stat-card" style="border-left-color:#10b981;">
+          <div class="stat-value">${completionRate}%</div>
+          <div class="stat-label">Overall Completion</div>
+        </div>
+        <div class="stat-card" style="border-left-color:#3b82f6;">
+          <div class="stat-value">${Object.keys(stats.tasksByProject).length}</div>
+          <div class="stat-label">Total Projects</div>
+        </div>
+      `;
+
+      let groupsHtml = '';
+      Object.entries(stats.tasksByProject).forEach(([pName, pTasks]) => {
+        const activeProjTasks = (pTasks as any[]).filter(t => t.status !== 'Complete');
+        if (activeProjTasks.length === 0) return; // Only show projects with active tasks in detail? Or all? Let's show all for now.
+
+        const tasksHtml = (pTasks as any[]).map(t => {
+          const isOverdue = t.status !== 'Complete' && t.due && new Date(t.due) < new Date();
+          const statusClass = t.status === 'Complete' ? 'pill-complete' :
+            t.status === 'In Progress' ? 'pill-progress' :
+              t.status === 'Needs Revision' ? 'pill-revision' : 'pill-pending';
+
+          return `
+            <div class="wd-task-row" style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #f1f5f9;">
+              <div style="flex:1;">
+                <div style="font-size:12px; font-weight:600; color:var(--accent);">${esc(t.task)}</div>
+                <div style="font-size:10px; color:var(--muted); margin-top:2px;">
+                  Due: <span style="${isOverdue ? 'color:#ef4444;font-weight:700;' : ''}">${esc(formatDate(t.due))}</span>
+                  ${t.priority === 'High' ? ' | <span style="color:#ef4444;font-weight:700;">HIGH PRIORITY</span>' : ''}
+                </div>
+              </div>
+              <div class="status-pill ${statusClass}">${esc(t.status || 'Pending')}</div>
+            </div>
+          `;
+        }).join('');
+
+        groupsHtml += `
+          <div class="card" style="padding:12px; border:1px solid #e2e8f0; background:white;">
+            <h5 style="margin:0 0 10px 0; font-size:12px; color:var(--accent); display:flex; justify-content:space-between;">
+              <span>Project: <strong>${esc(pName)}</strong></span>
+              <span class="small muted">${(pTasks as any[]).length} total tasks</span>
+            </h5>
+            <div style="display:flex; flex-direction:column;">
+              ${tasksHtml}
+            </div>
+          </div>
+        `;
+      });
+
+      wdTaskGroupList.innerHTML = groupsHtml || '<div class="small muted" style="text-align:center; padding:20px;">No active tasks found for this employee.</div>';
     }
 
     // ---------- RENDER TASK TABLE ----------
@@ -4325,6 +4467,19 @@ export default function ProjectManagerClient() {
     const assigneesBox = el('assigneesBox');
     const taskCancel = el('taskCancel');
     const taskOK = el('taskOK');
+
+    // ---------- WORKLOAD DETAIL MODAL ----------
+    const workloadDetailModal = el('workloadDetailModal');
+    const wdName = el('wdName');
+    const wdLevel = el('wdLevel');
+    const wdAvatar = el('wdAvatar');
+    const wdSummary = el('wdSummary');
+    const wdTaskGroupList = el('wdTaskGroupList');
+    const wdClose = el('wdClose');
+    const wdCloseBtn = el('wdCloseBtn');
+
+    wdClose && wdClose.addEventListener('click', () => hideModal(workloadDetailModal));
+    wdCloseBtn && wdCloseBtn.addEventListener('click', () => hideModal(workloadDetailModal));
 
     async function loadStageAndSubOptionsForProject(projectId: string | null) {
       if (!tStage || !tSub) return;
