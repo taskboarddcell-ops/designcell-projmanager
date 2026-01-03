@@ -313,9 +313,27 @@ const staticHtml = `
 
         <!-- Workload Analysis -->
         <section id="viewWorkload" class="card" style="display:none">
-          <div id="workloadHeader" style="margin-bottom:20px;">
-            <h2 style="margin:0;font-size:18px;color:var(--accent);">Smart Workload Analysis</h2>
-            <p class="small muted">Workload distribution and performance metrics for all employees.</p>
+          <div id="workloadHeader" style="margin-bottom:20px; display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:16px;">
+            <div>
+              <h2 style="margin:0;font-size:18px;color:var(--accent);">Smart Workload Analysis</h2>
+              <p class="small muted" style="margin:0;">Workload distribution and performance metrics for all employees.</p>
+            </div>
+            <div style="display:flex; gap:12px; align-items:center;">
+              <div class="search-wrap" style="width:240px; margin:0;">
+                <span class="icon">
+                  <svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 -960 960 960" width="20px" fill="var(--muted)">
+                    <path d="M784-120 532-372q-30 24-69 38t-83 14q-109 0-184.5-75.5T120-580q0-109 75.5-184.5T380-840q109 0 184.5 75.5T640-580q0 44-14 83t-38 69l252 252-56 56ZM380-400q75 0 127.5-52.5T560-580q0-75-52.5-127.5T380-760q-75 0-127.5 52.5T200-580q0 75 52.5 127.5T380-400Z"/>
+                  </svg>
+                </span>
+                <input id="workloadSearch" type="text" placeholder="Search workers..." autocomplete="off" style="padding: 8px 8px 8px 36px;">
+              </div>
+              <select id="workloadSort" class="select" style="width:180px; margin:0;">
+                <option value="load">Highest Load Score</option>
+                <option value="tasks">Most Active Tasks</option>
+                <option value="overdue">Most Overdue</option>
+                <option value="name">Name (A-Z)</option>
+              </select>
+            </div>
           </div>
           <div id="workloadContent" class="workload-dashboard">
             <!-- Dynamically populated -->
@@ -2005,6 +2023,9 @@ export default function ProjectManagerClient() {
     const viewKanban = el('viewKanban');
     const viewStages = el('viewStages');
 
+    const workloadSearch = el('workloadSearch') as HTMLInputElement | null;
+    const workloadSort = el('workloadSort') as HTMLSelectElement | null;
+
     function selectTab(which: 'tasks' | 'kanban' | 'stages' | 'workload') {
       const map: Record<
         string,
@@ -2035,6 +2056,9 @@ export default function ProjectManagerClient() {
     tabKanban && tabKanban.addEventListener('click', () => selectTab('kanban'));
     tabStages && tabStages.addEventListener('click', () => selectTab('stages'));
     tabWorkload && tabWorkload.addEventListener('click', () => selectTab('workload'));
+
+    workloadSearch && workloadSearch.addEventListener('input', () => renderWorkloadAnalysis());
+    workloadSort && workloadSort.addEventListener('change', () => renderWorkloadAnalysis());
 
     // ---------- FILTERS ----------
     const filterAssignee = el('filterAssignee') as HTMLSelectElement | null;
@@ -2888,66 +2912,93 @@ export default function ProjectManagerClient() {
       const employeeGrid = document.createElement('div');
       employeeGrid.className = 'employee-workload-grid';
 
-      Object.values(empStats)
-        .sort((a: any, b: any) => (b.inProgress + b.pending + b.revision) - (a.inProgress + a.pending + a.revision))
-        .forEach((stats: any) => {
-          const activeCount = stats.inProgress + stats.pending + stats.revision;
-          // Heuristic for load score
-          const loadScore = (activeCount * 1.5) + (stats.highPrio * 2) + (stats.overdue * 3);
-          const loadStatus = loadScore > 15 ? 'High' : loadScore > 8 ? 'Moderate' : 'Optimal';
-          const loadClass = loadScore > 15 ? 'load-high' : loadScore > 8 ? 'load-med' : 'load-low';
-          const loadWidth = Math.min((loadScore / 25) * 100, 100);
+      const query = (workloadSearch?.value || '').toLowerCase().trim();
+      const sortBy = workloadSort?.value || 'load';
 
-          const card = document.createElement('div');
-          card.className = 'workload-card';
-          card.innerHTML = `
-            <div class="workload-card-header">
-              <div class="emp-name">${esc(stats.name)}</div>
-              <div class="emp-level">${esc(stats.level)}</div>
-            </div>
-            <div class="workload-card-body">
-              <div class="workload-metric">
-                <div class="metric-header">
-                  <span>Capacity: <strong>${loadStatus}</strong></span>
-                  <span>${activeCount} Active Tasks</span>
+      const filteredStats = Object.values(empStats).filter((s: any) => {
+        if (!query) return true;
+        return s.name.toLowerCase().includes(query) || s.level.toLowerCase().includes(query);
+      });
+
+      if (filteredStats.length === 0) {
+        employeeGrid.innerHTML = `<div style="grid-column: 1 / -1; padding: 60px; text-align: center; background: #f8fafc; border-radius: 8px; border: 1px dashed var(--line-hair);">
+          <div style="font-size: 16px; font-weight: 600; color: var(--muted);">No workers found matching "${esc(query)}"</div>
+          <p class="small muted" style="margin-top: 4px;">Try a different name or level (e.g. Designer, Admin).</p>
+        </div>`;
+      } else {
+        filteredStats
+          .sort((a: any, b: any) => {
+            const aActive = a.inProgress + a.pending + a.revision;
+            const bActive = b.inProgress + b.pending + b.revision;
+
+            if (sortBy === 'tasks') return bActive - aActive;
+            if (sortBy === 'overdue') return b.overdue - a.overdue;
+            if (sortBy === 'name') return a.name.localeCompare(b.name);
+
+            // default: load score
+            const aScore = (aActive * 1.5) + (a.highPrio * 2) + (a.overdue * 3);
+            const bScore = (bActive * 1.5) + (b.highPrio * 2) + (b.overdue * 3);
+            return bScore - aScore;
+          })
+          .forEach((stats: any) => {
+            const activeCount = stats.inProgress + stats.pending + stats.revision;
+            // Heuristic for load score
+            const loadScore = (activeCount * 1.5) + (stats.highPrio * 2) + (stats.overdue * 3);
+            const loadStatus = loadScore > 15 ? 'High' : loadScore > 8 ? 'Moderate' : 'Optimal';
+            const loadClass = loadScore > 15 ? 'load-high' : loadScore > 8 ? 'load-med' : 'load-low';
+            const loadWidth = Math.min((loadScore / 25) * 100, 100);
+
+            const card = document.createElement('div');
+            card.className = 'workload-card';
+            card.innerHTML = `
+              <div class="workload-card-header">
+                <div class="emp-name">${esc(stats.name)}</div>
+                <div class="emp-level">${esc(stats.level)}</div>
+              </div>
+              <div class="workload-card-body">
+                <div class="workload-metric">
+                  <div class="metric-header">
+                    <span>Capacity: <strong>${loadStatus}</strong></span>
+                    <span>${activeCount} Active Tasks</span>
+                  </div>
+                  <div class="progress-bar-bg">
+                    <div class="progress-bar-fill ${loadClass}" style="width: ${loadWidth}%"></div>
+                  </div>
                 </div>
-                <div class="progress-bar-bg">
-                  <div class="progress-bar-fill ${loadClass}" style="width: ${loadWidth}%"></div>
+
+                <div class="status-pills">
+                  <div class="status-pill pill-pending">Pending: ${stats.pending}</div>
+                  <div class="status-pill pill-progress">Progress: ${stats.inProgress}</div>
+                  <div class="status-pill pill-revision">Revision: ${stats.revision}</div>
+                  <div class="status-pill pill-complete">Completed: ${stats.complete}</div>
+                </div>
+
+                <div style="margin-top:16px; display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+                   <div style="background:#f8fafc; padding:8px; border-radius:4px; text-align:center;">
+                      <div style="font-size:16px; font-weight:800; color:#ef4444;">${stats.overdue}</div>
+                      <div style="font-size:9px; text-transform:uppercase; color:var(--muted); font-weight:700;">Overdue</div>
+                   </div>
+                   <div style="background:#f8fafc; padding:8px; border-radius:4px; text-align:center;">
+                      <div style="font-size:16px; font-weight:800; color:#3b82f6;">${stats.projects.size}</div>
+                      <div style="font-size:9px; text-transform:uppercase; color:var(--muted); font-weight:700;">Active Proj</div>
+                   </div>
                 </div>
               </div>
-
-              <div class="status-pills">
-                <div class="status-pill pill-pending">Pending: ${stats.pending}</div>
-                <div class="status-pill pill-progress">Progress: ${stats.inProgress}</div>
-                <div class="status-pill pill-revision">Revision: ${stats.revision}</div>
-                <div class="status-pill pill-complete">Completed: ${stats.complete}</div>
+              <div class="workload-card-footer" style="display:flex; justify-content:space-between; align-items:center;">
+                <div style="display:flex; align-items:center;">
+                  <svg xmlns="http://www.w3.org/2000/svg" height="12" width="12" viewBox="0 -960 960 960" fill="currentColor" style="vertical-align:middle;margin-right:2px;">
+                    <path d="M480-280q17 0 28.5-11.5T520-320q0-17-11.5-28.5T480-360q-17 0-28.5 11.5T440-320q0 17 11.5 28.5T480-280Zm-40-160h80v-240h-80v240Zm40 360q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-80q134 0 227-93t93-227q0-134-93-227t-227-93q-134 0-227 93t-93 227q0 134 93 227t227 93Zm0-320Z"/>
+                  </svg>
+                  ${stats.highPrio} high priority
+                </div>
+                <div style="text-decoration:underline; font-weight:700; color:var(--accent);">View Details &rarr;</div>
               </div>
-
-              <div style="margin-top:16px; display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
-                 <div style="background:#f8fafc; padding:8px; border-radius:4px; text-align:center;">
-                    <div style="font-size:16px; font-weight:800; color:#ef4444;">${stats.overdue}</div>
-                    <div style="font-size:9px; text-transform:uppercase; color:var(--muted); font-weight:700;">Overdue</div>
-                 </div>
-                 <div style="background:#f8fafc; padding:8px; border-radius:4px; text-align:center;">
-                    <div style="font-size:16px; font-weight:800; color:#3b82f6;">${stats.projects.size}</div>
-                    <div style="font-size:9px; text-transform:uppercase; color:var(--muted); font-weight:700;">Active Proj</div>
-                 </div>
-              </div>
-            </div>
-            <div class="workload-card-footer" style="display:flex; justify-content:space-between; align-items:center;">
-              <div style="display:flex; align-items:center;">
-                <svg xmlns="http://www.w3.org/2000/svg" height="12" width="12" viewBox="0 -960 960 960" fill="currentColor" style="vertical-align:middle;margin-right:2px;">
-                  <path d="M480-280q17 0 28.5-11.5T520-320q0-17-11.5-28.5T480-360q-17 0-28.5 11.5T440-320q0 17 11.5 28.5T480-280Zm-40-160h80v-240h-80v240Zm40 360q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-80q134 0 227-93t93-227q0-134-93-227t-227-93q-134 0-227 93t-93 227q0 134 93 227t227 93Zm0-320Z"/>
-                </svg>
-                ${stats.highPrio} high priority
-              </div>
-              <div style="text-decoration:underline; font-weight:700; color:var(--accent);">View Details &rarr;</div>
-            </div>
-          `;
-          card.style.cursor = 'pointer';
-          card.onclick = () => openWorkloadDetailModal(stats.name);
-          employeeGrid.appendChild(card);
-        });
+            `;
+            card.style.cursor = 'pointer';
+            card.onclick = () => openWorkloadDetailModal(stats.name);
+            employeeGrid.appendChild(card);
+          });
+      }
 
       workloadContent.innerHTML = summaryHtml;
       workloadContent.appendChild(employeeGrid);
