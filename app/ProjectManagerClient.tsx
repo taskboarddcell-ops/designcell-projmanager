@@ -3852,7 +3852,9 @@ export default function ProjectManagerClient() {
                 }
 
                 // Handle navigation within SPA
-                if (link && link.startsWith('/tasks/')) {
+                if (link === '#tabReview') {
+                  selectTab('review');
+                } else if (link && link.startsWith('/tasks/')) {
                   // Extract task ID from link like "/tasks/uuid"
                   const taskId = link.replace('/tasks/', '');
 
@@ -5931,12 +5933,15 @@ export default function ProjectManagerClient() {
         if (isVerReq && checkerStaffId) {
           await fetch('/api/notifications/create', {
             method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              userId: checkerStaffId,
-              title: 'Task Awaiting Review',
-              message: `${currentUser.name} submitted "${selectedTask.task}" for review.`,
-              type: 'TASK_SUBMITTED_FOR_REVIEW',
-              linkUrl: '#tabReview'
+              notifications: [{
+                user_id: checkerStaffId,
+                title: 'Task Awaiting Review',
+                body: `${currentUser.name} submitted "${selectedTask.task}" for review.`,
+                type: 'TASK_SUBMITTED_FOR_REVIEW',
+                link_url: '#tabReview'
+              }]
             })
           });
         }
@@ -5985,17 +5990,19 @@ export default function ProjectManagerClient() {
 
         // Notify assignees (if any)
         if (selectedTask.assignee_ids && selectedTask.assignee_ids.length > 0) {
-          for (const aid of selectedTask.assignee_ids) {
-            await fetch('/api/notifications/create', {
-              method: 'POST',
-              body: JSON.stringify({
-                userId: aid,
-                title: 'Task Review Approved',
-                message: `Your task "${selectedTask.task}" has been accepted by ${currentUser.name}.`,
-                type: 'TASK_REVIEW_ACCEPTED'
-              })
-            });
-          }
+          const notifications = selectedTask.assignee_ids.map(aid => ({
+            user_id: aid,
+            title: 'Task Review Approved',
+            body: `Your task "${selectedTask.task}" has been accepted by ${currentUser.name}.`,
+            type: 'TASK_REVIEW_ACCEPTED',
+            link_url: `/tasks/${selectedTask.id}`
+          }));
+
+          await fetch('/api/notifications/create', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ notifications })
+          });
         }
 
         hideModal(reviewFeedbackModal);
@@ -6043,17 +6050,19 @@ export default function ProjectManagerClient() {
 
         // Notify assignees
         if (selectedTask.assignee_ids && selectedTask.assignee_ids.length > 0) {
-          for (const aid of selectedTask.assignee_ids) {
-            await fetch('/api/notifications/create', {
-              method: 'POST',
-              body: JSON.stringify({
-                userId: aid,
-                title: 'Revision Requested',
-                message: `${currentUser.name} requested revision on "${selectedTask.task}": ${feedback}`,
-                type: 'TASK_REVIEW_REJECTED'
-              })
-            });
-          }
+          const notifications = selectedTask.assignee_ids.map(aid => ({
+            user_id: aid,
+            title: 'Revision Requested',
+            body: `${currentUser.name} requested revision on "${selectedTask.task}": ${feedback}`,
+            type: 'TASK_REVIEW_REJECTED',
+            link_url: `/tasks/${selectedTask.id}`
+          }));
+
+          await fetch('/api/notifications/create', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ notifications })
+          });
         }
 
         hideModal(reviewFeedbackModal);
