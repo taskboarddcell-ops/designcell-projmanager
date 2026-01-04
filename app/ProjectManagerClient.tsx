@@ -138,6 +138,15 @@ const staticHtml = `
             </svg>
             Workload Analysis
           </button>
+
+          <!-- Review tab (fifth, dynamic) -->
+          <button id="tabReview" class="tab" aria-selected="false" style="display:none; position:relative;">
+            <svg xmlns="http://www.w3.org/2000/svg" height="20" width="20" class="tab-icon" viewBox="0 -960 960 960">
+              <path d="M480-80q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-80q134 0 227-93t93-227q0-134-93-227t-227-93q-134 0-227 93t-93 227q0 134 93 227t227 93Zm40-255-70-70-120 120-60-60-70 70 130 130 190-190Z"/>
+            </svg>
+            Review
+            <span id="reviewBadge" class="notification-badge" style="display:none; position:absolute; top:-8px; right:-8px; background:#f59e0b; color:white; border-radius:10px; min-width:18px; height:18px; padding:0 5px; font-size:10px; align-items:center; justify-content:center; font-weight:bold; border:2px solid white;">0</span>
+          </button>
         </div>
 
         <div class="topbar-right" style="display:flex;align-items:center;gap:8px;">
@@ -344,6 +353,30 @@ const staticHtml = `
             </div>
           </div>
         </section>
+        
+        <!-- Task Review Module -->
+        <section id="viewReview" class="card" style="display:none">
+          <div style="margin-bottom:16px;">
+            <h2 style="margin:0;font-size:18px;color:var(--accent);">Verify Task Completions</h2>
+            <p class="small muted" style="margin:0;">These tasks have been submitted to you for final approval.</p>
+          </div>
+          
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Project</th>
+                  <th>Task</th>
+                  <th>Assignees</th>
+                  <th>Completed On</th>
+                  <th>Remarks</th>
+                  <th class="right">Action</th>
+                </tr>
+              </thead>
+              <tbody id="reviewBody"></tbody>
+            </table>
+          </div>
+        </section>
       </div>
     </main>
   </div>
@@ -494,15 +527,46 @@ const staticHtml = `
     </div>
   </div>
 
-  <!-- COMPLETE -->
-  <div id="doneModal" class="modal">
-    <div class="mc" style="max-width:420px">
-      <h3 style="margin:0 0 8px 0">Complete Task</h3>
-      <label class="small muted">Completion Remarks</label>
-      <input id="doneRemark" class="input">
-      <div class="right">
-        <button id="doneCancel" class="btn">Cancel</button>
-        <button id="doneOK" class="btn btn-primary">Mark Complete</button>
+  <!-- COMPLETION REVIEW MODAL -->
+  <div id="completionReviewModal" class="modal">
+    <div class="mc" style="max-width:480px">
+      <h3 style="margin:0 0 12px 0">Complete Task</h3>
+      <div id="completionTaskInfo" class="small muted" style="margin-bottom:12px"></div>
+      
+      <label class="small muted">Completion Remarks (What was done?)</label>
+      <textarea id="completionRemarks" class="input" style="height:80px" placeholder="e.g. Draft finalized, sent to client..."></textarea>
+      
+      <div style="margin: 12px 0; padding: 12px; background: rgba(0,0,0,0.03); border-radius: 6px;">
+        <label class="chk-line" style="font-weight:600">
+          <input type="checkbox" id="requireReview" checked> Require verification by another team member?
+        </label>
+        
+        <div id="reviewSetupBox" style="margin-top:10px;">
+          <label class="small muted">Assign Checker</label>
+          <select id="reviewChecker" class="select"></select>
+        </div>
+      </div>
+
+      <div class="right" style="margin-top:16px">
+        <button id="completionReviewCancel" class="btn">Cancel</button>
+        <button id="btnSubmitForReview" class="btn btn-primary">Submit for Review</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- REVIEW FEEDBACK MODAL (for the checker) -->
+  <div id="reviewFeedbackModal" class="modal">
+    <div class="mc" style="max-width:500px">
+      <h3 style="margin:0 0 12px 0">Verify Task Performance</h3>
+      <div id="reviewTaskInfo" style="padding:12px; background:var(--bg-app); border-radius:6px; margin-bottom:16px; border:1px solid var(--line-hair); font-size:13px;"></div>
+      
+      <label class="small muted">Review Comments / Feedback</label>
+      <textarea id="reviewFeedbackComments" class="input" style="height:100px" placeholder="Provide feedback or reasons for revision/rejection..."></textarea>
+      
+      <div class="right" style="margin-top:20px; gap:8px;">
+        <button id="reviewFeedbackCancel" class="btn">Cancel</button>
+        <button id="btnRequestRevision" class="btn" style="background:#f59e0b; color:white;">Needs Revision</button>
+        <button id="btnAcceptCompletion" class="btn btn-primary">Accept & Complete</button>
       </div>
     </div>
   </div>
@@ -1767,19 +1831,43 @@ export default function ProjectManagerClient() {
       // If moving to "Needs Revision", prompt for comments
       if (newStatus === 'Needs Revision') {
         kanbanUpdatingTasks.delete(taskId);
-
-        // Set selected task and open revision modal
         selectedTask = task;
         if (revisionComments) revisionComments.value = '';
         if (revisionTaskInfo) {
-          revisionTaskInfo.innerHTML = `
-            <strong>Project:</strong> ${esc(task.project_name)}<br>
-            <strong>Task:</strong> ${esc(task.task)}<br>
-            <strong>Assignees:</strong> ${esc((task.assignees || []).join(', '))}
-          `;
+          revisionTaskInfo.innerHTML = `<strong>Project:</strong> ${esc(task.project_name)}<br><strong>Task:</strong> ${esc(task.task)}<br><strong>Assignees:</strong> ${esc((task.assignees || []).join(', '))}`;
         }
         showModal(revisionModal);
-        renderKanban(); // Reset UI in case drag didn't complete
+        renderKanban();
+        return;
+      }
+
+      // NEW: Trigger completion review modal if moved to Complete
+      if (newStatus === 'Complete') {
+        kanbanUpdatingTasks.delete(taskId);
+        selectedTask = task;
+
+        if (completionRemarks) completionRemarks.value = task.completion_remarks || '';
+        if (requireReview) requireReview.checked = true;
+        if (reviewSetupBox) reviewSetupBox.style.display = 'block';
+
+        if (completionTaskInfo) {
+          completionTaskInfo.innerHTML = `<strong>Project:</strong> ${esc(task.project_name)}<br><strong>Task:</strong> ${esc(task.task)}`;
+        }
+
+        // Load users if not already loaded
+        if (allUsers.length === 0) {
+          await loadAllUsers();
+        }
+
+        if (reviewChecker) {
+          reviewChecker.innerHTML = allUsers
+            .filter(u => u.staff_id !== currentUser.staff_id && u.status !== 'deactivated')
+            .map(u => `<option value="${esc(u.staff_id)}">${esc(u.name)} [${esc(u.access_level)}]</option>`)
+            .join('');
+        }
+
+        showModal(completionReviewModal);
+        renderKanban(); // Reset UI
         return;
       }
 
@@ -2028,7 +2116,30 @@ export default function ProjectManagerClient() {
     const workloadSearch = el('workloadSearch') as HTMLInputElement | null;
     const workloadSort = el('workloadSort') as HTMLSelectElement | null;
 
-    function selectTab(which: 'tasks' | 'kanban' | 'stages' | 'workload') {
+    // Review & Completion Dialogs
+    const completionReviewModal = el('completionReviewModal');
+    const completionTaskInfo = el('completionTaskInfo');
+    const completionRemarks = el('completionRemarks') as HTMLTextAreaElement | null;
+    const requireReview = el('requireReview') as HTMLInputElement | null;
+    const reviewSetupBox = el('reviewSetupBox');
+    const reviewChecker = el('reviewChecker') as HTMLSelectElement | null;
+    const completionReviewCancel = el('completionReviewCancel');
+    const btnSubmitForReview = el('btnSubmitForReview');
+
+    const reviewFeedbackModal = el('reviewFeedbackModal');
+    const reviewTaskInfo = el('reviewTaskInfo');
+    const reviewFeedbackComments = el('reviewFeedbackComments') as HTMLTextAreaElement | null;
+    const btnRequestRevision = el('btnRequestRevision');
+    const btnAcceptCompletion = el('btnAcceptCompletion');
+    const reviewFeedbackCancel = el('reviewFeedbackCancel');
+
+    const tabReview = el('tabReview');
+    const reviewBadge = el('reviewBadge');
+    const viewReview = el('viewReview');
+    const reviewBody = el('reviewBody');
+
+
+    function selectTab(which: 'tasks' | 'kanban' | 'stages' | 'workload' | 'review') {
       const map: Record<
         string,
         { tab: HTMLElement | null; view: HTMLElement | null }
@@ -2037,6 +2148,7 @@ export default function ProjectManagerClient() {
         kanban: { tab: tabKanban, view: viewKanban },
         stages: { tab: tabStages, view: viewStages },
         workload: { tab: tabWorkload, view: viewWorkload },
+        review: { tab: tabReview, view: viewReview },
       };
 
       Object.entries(map).forEach(([key, pair]) => {
@@ -2052,12 +2164,14 @@ export default function ProjectManagerClient() {
       if (which === 'tasks') renderTasks();
       if (which === 'stages') renderProjectStructure();
       if (which === 'workload') renderWorkloadAnalysis();
+      if (which === 'review') renderReviewModule();
     }
 
     tabTasks && tabTasks.addEventListener('click', () => selectTab('tasks'));
     tabKanban && tabKanban.addEventListener('click', () => selectTab('kanban'));
     tabStages && tabStages.addEventListener('click', () => selectTab('stages'));
     tabWorkload && tabWorkload.addEventListener('click', () => selectTab('workload'));
+    tabReview && tabReview.addEventListener('click', () => selectTab('review'));
 
     workloadSearch && workloadSearch.addEventListener('input', () => renderWorkloadAnalysis());
     workloadSort && workloadSort.addEventListener('change', () => renderWorkloadAnalysis());
@@ -3111,6 +3225,118 @@ export default function ProjectManagerClient() {
       wdTaskGroupList.innerHTML = groupsHtml || '<div class="small muted" style="text-align:center; padding:20px;">No active tasks found for this employee.</div>';
     }
 
+    async function renderReviewModule() {
+      if (!reviewBody || !currentUser) return;
+
+      const { data, error } = await supabase
+        .from('tasks')
+        .select('*')
+        .eq('status', 'Under Review')
+        .order('completed_at', { ascending: false });
+
+      if (error) {
+        console.error('Failed to fetch review tasks', error);
+        reviewBody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:red;">Error loading review tasks</td></tr>';
+        return;
+      }
+
+      // Filter tasks where the current user is the explicitly assigned reviewer
+      const tasksForMe = (data || []).filter(t => t.reviewed_by === currentUser.staff_id || t.reviewed_by === currentUser.name);
+
+      if (tasksForMe.length === 0) {
+        reviewBody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;" class="muted">No tasks currently awaiting your review.</td></tr>';
+        return;
+      }
+
+      reviewBody.innerHTML = tasksForMe.map(t => `
+        <tr style="border-bottom:1px solid var(--line-hair);">
+          <td style="padding:12px 10px;">
+            <div style="font-weight:600;">${esc(t.project_name)}</div>
+          </td>
+          <td style="padding:12px 10px;">
+            <div style="font-weight:500;">${esc(t.task)}</div>
+          </td>
+          <td style="padding:12px 10px;">
+            ${(t.assignees || []).map(nm => `<span class="chip chip-assignee">${esc(nm)}</span>`).join('')}
+          </td>
+          <td style="padding:12px 10px;" class="small muted">
+            ${t.completed_at ? new Date(t.completed_at).toLocaleString() : 'N/A'}
+          </td>
+          <td style="padding:12px 10px;">
+            <div class="small muted" style="max-width:200px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${esc(t.completion_remarks || '')}">
+              ${esc(t.completion_remarks || '--')}
+            </div>
+          </td>
+          <td style="padding:12px 10px; text-align:right;">
+            <button class="btn-sm btn-primary act-verify" data-id="${esc(t.id)}">Verify</button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function openReviewFeedbackModal(task: any) {
+      if (!reviewFeedbackModal) return;
+      selectedTask = task;
+
+      const info = el('reviewTaskInfo');
+      if (info) {
+        info.innerHTML = `
+          <div style="margin-bottom:8px;"><strong>Project:</strong> ${esc(task.project_name)}</div>
+          <div style="margin-bottom:8px;"><strong>Task:</strong> ${esc(task.task)}</div>
+          <div style="margin-bottom:8px;"><strong>Submitted By:</strong> ${esc((task.assignees || []).join(', '))}</div>
+          ${task.completion_remarks ? `<div style="margin-top:10px; padding:8px; background:white; border-radius:4px; font-size:12px; border:1px solid var(--line-hair);"><strong>Assignee Remarks:</strong><br>${esc(task.completion_remarks)}</div>` : ''}
+        `;
+      }
+
+      const comments = el('reviewFeedbackComments') as HTMLTextAreaElement | null;
+      if (comments) comments.value = '';
+
+      showModal(reviewFeedbackModal);
+    }
+
+    async function refreshReviewTabStatus() {
+      if (!tabReview || !currentUser) return;
+
+      try {
+        // Use wildcard select to get all fields, in case reviewed_by column doesn't exist yet
+        const { data, error } = await supabase
+          .from('tasks')
+          .select('*')
+          .eq('status', 'Under Review');
+
+        if (error) {
+          console.error('Review count check error:', error.message || error);
+          // Hide tab on error
+          tabReview.style.display = 'none';
+          if (reviewBadge) reviewBadge.style.display = 'none';
+          return;
+        }
+
+        // Filter by current user in JS to handle Name vs ID
+        // Also handle case where reviewed_by might not exist yet
+        const myReviews = (data || []).filter(t => {
+          if (!t.reviewed_by) return false;
+          return t.reviewed_by === currentUser.staff_id || t.reviewed_by === currentUser.name;
+        });
+        const reviewCount = myReviews.length;
+
+        if (reviewCount > 0) {
+          tabReview.style.display = 'flex';
+          if (reviewBadge) {
+            reviewBadge.textContent = reviewCount.toString();
+            reviewBadge.style.display = 'flex';
+          }
+        } else {
+          tabReview.style.display = 'none';
+          if (reviewBadge) reviewBadge.style.display = 'none';
+        }
+      } catch (err: any) {
+        console.error('Exception in refreshReviewTabStatus:', err.message || err);
+        tabReview.style.display = 'none';
+        if (reviewBadge) reviewBadge.style.display = 'none';
+      }
+    }
+
     // ---------- RENDER TASK TABLE ----------
     function renderTasks() {
       const body = el('tasksBody');
@@ -3901,6 +4127,7 @@ export default function ProjectManagerClient() {
       }
       updateProjectStatusControl();
       refreshRoleUI();
+      refreshReviewTabStatus();
     }
 
     // ---------- PROJECT TYPES (TEMPLATES) ----------
@@ -5141,7 +5368,7 @@ export default function ProjectManagerClient() {
       historyClose.addEventListener('click', () => hideModal(historyModal));
 
     tasksBody &&
-      tasksBody.addEventListener('click', (ev) => {
+      tasksBody.addEventListener('click', async (ev) => {
         const target = ev.target as HTMLElement;
         if (!target) return;
 
@@ -5164,44 +5391,33 @@ export default function ProjectManagerClient() {
           if (resRemark) resRemark.value = task.reschedule_remarks || '';
           showModal(resModal);
         } else if (target.classList.contains('act-complete')) {
-          if (doneRemark) doneRemark.value = task.completion_remarks || '';
-          showModal(doneModal);
-        } else if (target.classList.contains('act-request-revision')) {
-          if (revisionComments) revisionComments.value = '';
-          if (revisionTaskInfo) {
-            revisionTaskInfo.innerHTML = `
-              <strong>Project:</strong> ${esc(task.project_name)}<br>
-              <strong>Task:</strong> ${esc(task.task)}<br>
-              <strong>Assignees:</strong> ${esc((task.assignees || []).join(', '))}
-            `;
+          // Open completion review modal instead of simple doneModal
+          if (completionRemarks) completionRemarks.value = task.completion_remarks || '';
+          if (requireReview) requireReview.checked = true;
+          if (reviewSetupBox) reviewSetupBox.style.display = 'block';
+
+          // Set basic info
+          if (completionTaskInfo) {
+            completionTaskInfo.innerHTML = `<strong>Project:</strong> ${esc(task.project_name)}<br><strong>Task:</strong> ${esc(task.task)}`;
           }
-          showModal(revisionModal);
-        } else if (target.classList.contains('act-review')) {
-          if (reviewComments) reviewComments.value = '';
-          if (reviewTaskInfo) {
-            let infoHtml = `
-              <strong>Project:</strong> ${esc(task.project_name)}<br>
-              <strong>Task:</strong> ${esc(task.task)}<br>
-              <strong>Assignees:</strong> ${esc((task.assignees || []).join(', '))}
-            `;
 
-            if (task.reviewed_by) {
-              infoHtml += `<br><strong>Last Reviewed By:</strong> ${esc(task.reviewed_by)}`;
-            }
-
-            if (task.review_comments && task.status === 'Under Review') {
-              infoHtml += `<br><br><div style="padding:8px;background:#fef3c7;border-left:3px solid #f59e0b;border-radius:4px;margin-top:8px;">
-                <strong>Previous Feedback:</strong><br>
-                <span style="font-size:12px;">${esc(task.review_comments)}</span>
-              </div>`;
-            }
-
-            reviewTaskInfo.innerHTML = infoHtml;
+          // Load users if not already loaded
+          if (allUsers.length === 0) {
+            await loadAllUsers();
           }
-          if (reviewAction) reviewAction.value = 'Approve';
-          if (revisionNoteSection) revisionNoteSection.style.display = 'none';
-          showModal(reviewModal);
-        } else if (target.classList.contains('act-status')) {
+
+          // Populate checkers
+          if (reviewChecker) {
+            reviewChecker.innerHTML = allUsers
+              .filter(u => u.staff_id !== currentUser.staff_id && u.status !== 'deactivated')
+              .map(u => `<option value="${esc(u.staff_id)}">${esc(u.name)} [${esc(u.access_level)}]</option>`)
+              .join('');
+          }
+          showModal(completionReviewModal);
+        } else if (target.classList.contains('act-verify')) {
+          // Open review feedback modal
+          openReviewFeedbackModal(task);
+        } else if (target.classList.contains("act-status")) {
           if (stSel) stSel.value = task.status || 'Pending';
           if (stNote) stNote.value = task.current_status || '';
           showModal(statusModal);
@@ -5258,6 +5474,20 @@ export default function ProjectManagerClient() {
               toast('Failed to delete task: ' + (result.error || 'Unknown error'));
             }
           })();
+        }
+      });
+
+    reviewBody &&
+      reviewBody.addEventListener('click', (ev) => {
+        const target = ev.target as HTMLElement;
+        const id = target.getAttribute('data-id');
+        if (!id) return;
+
+        const task = tasks.find(t => String(t.id) === String(id));
+        if (!task) return;
+
+        if (target.classList.contains('act-verify')) {
+          openReviewFeedbackModal(task);
         }
       });
 
@@ -5623,7 +5853,7 @@ export default function ProjectManagerClient() {
         .update({
           status: 'Needs Revision',
           review_comments: comments,
-          reviewed_by: currentUser.name || currentUser.staff_id,
+          reviewed_by: currentUser.staff_id,
           reviewed_at: new Date().toISOString(),
         })
         .eq('id', selectedTask.id);
@@ -5654,6 +5884,189 @@ export default function ProjectManagerClient() {
       await loadDataAfterLogin();
     });
 
+    // Completion Review Listeners
+    completionReviewCancel && completionReviewCancel.addEventListener('click', () => hideModal(completionReviewModal));
+
+    requireReview && requireReview.addEventListener('change', () => {
+      if (reviewSetupBox) reviewSetupBox.style.display = requireReview.checked ? 'block' : 'none';
+    });
+
+    btnSubmitForReview && btnSubmitForReview.addEventListener('click', async () => {
+      if (!selectedTask || !currentUser) return;
+      const btn = btnSubmitForReview as HTMLButtonElement;
+      btn.disabled = true;
+
+      try {
+        const isVerReq = requireReview?.checked;
+        const remarks = completionRemarks?.value.trim() || '';
+        const checkerStaffId = reviewChecker?.value;
+        const checkerUser = allUsers.find(u => u.staff_id === checkerStaffId);
+
+        const updatePayload: any = {
+          completion_remarks: remarks || null,
+          status: isVerReq ? 'Under Review' : 'Complete',
+          completed_at: new Date().toISOString(),
+          completed_by: currentUser.name || currentUser.staff_id
+        };
+
+        if (isVerReq && checkerStaffId) {
+          updatePayload.reviewed_by = checkerStaffId;
+        }
+
+        const { error } = await supabase.from('tasks').update(updatePayload).eq('id', selectedTask.id);
+        if (error) throw error;
+
+        // Log action
+        await supabase.from('task_status_log').insert([{
+          task_id: selectedTask.id,
+          action: isVerReq ? 'submitted_for_review' : 'marked_complete',
+          from_status: selectedTask.status,
+          to_status: updatePayload.status,
+          note: remarks,
+          changed_by_id: currentUser.staff_id,
+          changed_by_name: currentUser.name
+        }]);
+
+        // Notifications
+        if (isVerReq && checkerStaffId) {
+          await fetch('/api/notifications/create', {
+            method: 'POST',
+            body: JSON.stringify({
+              userId: checkerStaffId,
+              title: 'Task Awaiting Review',
+              message: `${currentUser.name} submitted "${selectedTask.task}" for review.`,
+              type: 'TASK_SUBMITTED_FOR_REVIEW',
+              linkUrl: '#tabReview'
+            })
+          });
+        }
+
+        hideModal(completionReviewModal);
+        toast(isVerReq ? 'Task submitted for review' : 'Task marked complete');
+        await loadDataAfterLogin();
+        refreshReviewTabStatus();
+      } catch (err) {
+        console.error('Submit review error', err);
+        toast('Failed to update task');
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    // Review Feedback listeners
+    reviewFeedbackCancel && reviewFeedbackCancel.addEventListener('click', () => hideModal(reviewFeedbackModal));
+
+    btnAcceptCompletion && btnAcceptCompletion.addEventListener('click', async () => {
+      if (!selectedTask || !currentUser) return;
+      const btn = btnAcceptCompletion as HTMLButtonElement;
+      btn.disabled = true;
+
+      try {
+        const feedback = reviewFeedbackComments?.value.trim() || '';
+        const { error } = await supabase.from('tasks').update({
+          status: 'Complete',
+          review_comments: feedback || null,
+          reviewed_at: new Date().toISOString(),
+          reviewed_by: currentUser.staff_id // Standardized to staff_id
+        }).eq('id', selectedTask.id);
+
+        if (error) throw error;
+
+        // Log
+        await supabase.from('task_status_log').insert([{
+          task_id: selectedTask.id,
+          action: 'review_accepted',
+          from_status: 'Under Review',
+          to_status: 'Complete',
+          note: feedback,
+          changed_by_id: currentUser.staff_id,
+          changed_by_name: currentUser.name
+        }]);
+
+        // Notify assignees (if any)
+        if (selectedTask.assignee_ids && selectedTask.assignee_ids.length > 0) {
+          for (const aid of selectedTask.assignee_ids) {
+            await fetch('/api/notifications/create', {
+              method: 'POST',
+              body: JSON.stringify({
+                userId: aid,
+                title: 'Task Review Approved',
+                message: `Your task "${selectedTask.task}" has been accepted by ${currentUser.name}.`,
+                type: 'TASK_REVIEW_ACCEPTED'
+              })
+            });
+          }
+        }
+
+        hideModal(reviewFeedbackModal);
+        toast('Task approved and completed');
+        await loadDataAfterLogin();
+        refreshReviewTabStatus();
+      } catch (err) {
+        toast('Error accepting task');
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    btnRequestRevision && btnRequestRevision.addEventListener('click', async () => {
+      if (!selectedTask || !currentUser) return;
+      const feedback = reviewFeedbackComments?.value.trim();
+      if (!feedback) {
+        toast('Please provide feedback/reasons for revision');
+        return;
+      }
+
+      const btn = btnRequestRevision as HTMLButtonElement;
+      btn.disabled = true;
+
+      try {
+        const { error } = await supabase.from('tasks').update({
+          status: 'Needs Revision',
+          review_comments: feedback,
+          reviewed_at: new Date().toISOString(),
+          reviewed_by: currentUser.staff_id
+        }).eq('id', selectedTask.id);
+
+        if (error) throw error;
+
+        // Log
+        await supabase.from('task_status_log').insert([{
+          task_id: selectedTask.id,
+          action: 'review_revision_requested',
+          from_status: 'Under Review',
+          to_status: 'Needs Revision',
+          note: feedback,
+          changed_by_id: currentUser.staff_id,
+          changed_by_name: currentUser.name
+        }]);
+
+        // Notify assignees
+        if (selectedTask.assignee_ids && selectedTask.assignee_ids.length > 0) {
+          for (const aid of selectedTask.assignee_ids) {
+            await fetch('/api/notifications/create', {
+              method: 'POST',
+              body: JSON.stringify({
+                userId: aid,
+                title: 'Revision Requested',
+                message: `${currentUser.name} requested revision on "${selectedTask.task}": ${feedback}`,
+                type: 'TASK_REVIEW_REJECTED'
+              })
+            });
+          }
+        }
+
+        hideModal(reviewFeedbackModal);
+        toast('Revision requested');
+        await loadDataAfterLogin();
+        refreshReviewTabStatus();
+      } catch (err) {
+        toast('Error requesting revision');
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
     // Status update
     stCancel &&
       stCancel.addEventListener('click', () => hideModal(statusModal));
@@ -5676,20 +6089,38 @@ export default function ProjectManagerClient() {
 
           const newStatus = stSel.value || 'Pending';
           const note = stNote ? stNote.value.trim() : '';
-          const prevStatus = selectedTask.status || 'Pending';
 
+          if (newStatus === 'Complete') {
+            hideModal(statusModal);
+            (stOK as HTMLButtonElement).disabled = false;
+
+            // Load users if not already loaded
+            if (allUsers.length === 0) {
+              await loadAllUsers();
+            }
+
+            // Trigger completion review workflow
+            if (completionRemarks) completionRemarks.value = note;
+            if (requireReview) requireReview.checked = true;
+            if (reviewSetupBox) reviewSetupBox.style.display = 'block';
+            if (completionTaskInfo) {
+              completionTaskInfo.innerHTML = `<strong>Project:</strong> ${esc(selectedTask.project_name)}<br><strong>Task:</strong> ${esc(selectedTask.task)}`;
+            }
+            if (reviewChecker) {
+              reviewChecker.innerHTML = allUsers
+                .filter(u => u.staff_id !== currentUser.staff_id && u.status !== 'deactivated')
+                .map(u => `<option value="${esc(u.staff_id)}">${esc(u.name)} [${esc(u.access_level)}]</option>`)
+                .join('');
+            }
+            showModal(completionReviewModal);
+            return;
+          }
+
+          const prevStatus = selectedTask.status || 'Pending';
           const updatePayload: any = {
             status: newStatus,
             current_status: note || null,
           };
-
-          if (newStatus === 'Complete' && prevStatus !== 'Complete') {
-            updatePayload.completed_at = new Date().toISOString();
-            updatePayload.completed_by = currentUser.name || currentUser.staff_id;
-          } else if (newStatus !== 'Complete' && prevStatus === 'Complete') {
-            updatePayload.completed_at = null;
-            updatePayload.completed_by = null;
-          }
 
           const { error } = await supabase
             .from('tasks')
@@ -6548,41 +6979,20 @@ export default function ProjectManagerClient() {
     }
 
     function refreshRoleUI() {
-      if (!btnNewProject || !btnAddUser || !btnNewTask) return;
-
-      const selectAllHeader = el('selectAllHeader');
-
-      if (!currentUser) {
-        btnNewProject.style.display = 'none';
-        btnAddUser.style.display = 'none';
-        btnNewTask.style.display = 'none';
-        if (userManagementEntry) userManagementEntry.style.display = 'none';
-        if (reportsEntry) reportsEntry.style.display = 'none';
-        if (tabWorkload) tabWorkload.style.display = 'none';
-        if (selectAllHeader) selectAllHeader.style.display = 'none';
-        return;
-      }
-
-      if (isAdmin()) {
-        btnNewProject.style.display = '';
-        btnAddUser.style.display = '';
-        btnNewTask.style.display = '';
-        if (userManagementEntry) userManagementEntry.style.display = '';
-        if (reportsEntry) reportsEntry.style.display = '';
-        if (tabWorkload) tabWorkload.style.display = '';
-        if (tabWorkload) tabWorkload.style.display = 'flex';
-        if (selectAllHeader) selectAllHeader.style.display = '';
-      } else {
-        btnNewProject.style.display = 'none';
-        btnAddUser.style.display = 'none';
-        btnNewTask.style.display = userIsLeadAnywhere() ? '' : 'none';
-        if (userManagementEntry) userManagementEntry.style.display = 'none';
-        if (reportsEntry) reportsEntry.style.display = 'none';
-        if (tabWorkload) tabWorkload.style.display = 'none';
-        if (selectAllHeader) selectAllHeader.style.display = 'none';
-      }
+      const isAdminUser = isAdmin();
+      const tabUsers = el("tabUsers");
+      const tabReports = el("tabReports");
+      const tabWorkload = el("tabWorkload");
+      const tabReview = el("tabReview");
+      if (tabUsers) tabUsers.style.display = isAdminUser ? "flex" : "none";
+      if (tabReports) tabReports.style.display = isAdminUser ? "flex" : "none";
+      if (tabWorkload) tabWorkload.style.display = isAdminUser ? "flex" : "none";
+      if (!currentUser && tabReview) tabReview.style.display = "none";
+      const btnEditLayout = el("btnEditLayout");
+      if (btnEditLayout) btnEditLayout.style.display = isAdminUser ? "" : "none";
+      const selectAllHeader = container.querySelector(".chk-col-header") as HTMLElement;
+      if (selectAllHeader) selectAllHeader.style.display = isAdminUser ? "table-cell" : "none";
     }
-
     const keyHandler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         container.querySelectorAll<HTMLElement>('.modal.show').forEach((m) =>

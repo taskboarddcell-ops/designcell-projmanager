@@ -46,7 +46,7 @@ export interface Task {
     description?: string;
     due: string;
     priority: 'High' | 'Medium' | 'Low';
-    status: 'Pending' | 'In Progress' | 'Needs Revision' | 'Rejected' | 'Complete';
+    status: 'Pending' | 'In Progress' | 'Needs Revision' | 'Rejected' | 'Complete' | 'Under Review';
     assignee_ids: string[];
     assignees: string[];
     current_status?: string;
