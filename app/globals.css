@@ -367,6 +367,49 @@ textarea.input {
   font: inherit;
 }
 
+/* Advanced Filters */
+.filter-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: #f8fafc;
+  padding: 2px 6px;
+  border: 2px solid var(--line-hair);
+  border-radius: 4px;
+}
+
+.select.tiny,
+.input.tiny {
+  height: 28px;
+  padding: 2px 6px;
+  font-size: 12px;
+  min-height: unset;
+  border: none;
+  background: transparent;
+}
+
+.input.tiny {
+  width: 130px;
+}
+
+.search-wrap .btn-icon {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 4px;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.search-wrap .btn-icon:hover {
+  color: var(--ink);
+}
+
 textarea.input {
   resize: vertical;
 }

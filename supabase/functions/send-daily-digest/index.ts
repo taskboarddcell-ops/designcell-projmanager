@@ -58,13 +58,14 @@ serve(async (req: Request): Promise<Response> => {
 
     for (const user of users) {
       try {
-        // Get tasks for this user
+        // Get tasks for this user, filtering out projects on hold
         const { data: tasks, error: tasksError } = await supabase
           .from("tasks")
-          .select("*")
+          .select("*, projects!inner(project_status)")
           .contains("assignee_ids", [user.staff_id])
           .neq("status", "Complete")
           .neq("status", "Completed")
+          .neq("projects.project_status", "On Hold")
           .not("due", "is", null);
 
         if (tasksError) {

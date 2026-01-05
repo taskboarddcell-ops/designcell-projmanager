@@ -21,6 +21,7 @@ import {
     validateProjectContext,
     isAdmin,
     isProjectLead,
+    canUserChangeTaskStatus,
     assignLogger as logger,
 } from './types';
 
@@ -297,6 +298,7 @@ export async function bulkAssignTasks(
 
 /**
  * Update task status with optional completion details
+ * Now includes permission checking for completed tasks
  */
 export async function updateTaskStatus(
     supabase: SupabaseClient,
@@ -304,25 +306,55 @@ export async function updateTaskStatus(
     newStatus: string,
     remarks?: string,
     completedBy?: string,
-    reviewComments?: string
+    reviewComments?: string,
+    currentUser?: User,
+    currentStatus?: string // Added currentStatus for general notes
 ): Promise<{ success: boolean; error?: string }> {
     logger.info('Updating task status', { taskId, newStatus });
 
-    const updateData: any = { status: newStatus };
-
-    if (newStatus === 'Complete') {
-        updateData.completed_at = new Date().toISOString();
-        updateData.completed_by = completedBy;
-        if (remarks) updateData.completion_remarks = remarks;
-    } else if (newStatus === 'Pending' && remarks) {
-        updateData.reschedule_remarks = remarks;
-    } else if (newStatus === 'Needs Revision' && reviewComments) {
-        updateData.review_comments = reviewComments;
-    } else if (newStatus === 'Under Review' && remarks) {
-        updateData.completion_remarks = remarks; // Use completion_remarks for submission note
-    }
-
     try {
+        // First, fetch the current task to check permissions
+        const { data: currentTask, error: fetchError } = await supabase
+            .from('tasks')
+            .select('*')
+            .eq('id', taskId)
+            .single();
+
+        if (fetchError || !currentTask) {
+            logger.error('Failed to fetch task for status update', fetchError);
+            return { success: false, error: 'Task not found' };
+        }
+
+        // Check if user has permission to change status (if user provided)
+        if (currentUser) {
+            const { allowed, reason } = canUserChangeTaskStatus(currentUser, currentTask, newStatus);
+            if (!allowed) {
+                logger.warn('Status change denied', { taskId, currentStatus: currentTask.status, newStatus, reason });
+                return { success: false, error: reason };
+            }
+        }
+
+        const updateData: any = {
+            status: newStatus,
+            previous_status: currentTask.status // Track previous status
+        };
+
+        if (currentStatus) {
+            updateData.current_status = currentStatus;
+        }
+
+        if (newStatus === 'Complete') {
+            updateData.completed_at = new Date().toISOString();
+            updateData.completed_by = completedBy;
+            if (remarks) updateData.completion_remarks = remarks;
+        } else if (newStatus === 'Pending' && remarks) {
+            updateData.reschedule_remarks = remarks;
+        } else if (newStatus === 'Needs Revision' && reviewComments) {
+            updateData.review_comments = reviewComments;
+        } else if (newStatus === 'Under Review' && remarks) {
+            updateData.completion_remarks = remarks; // Use completion_remarks for submission note
+        }
+
         const { error } = await supabase
             .from('tasks')
             .update(updateData)
@@ -350,24 +382,13 @@ export async function deleteTask(
     supabase: SupabaseClient,
     taskId: string
 ): Promise<{ success: boolean; error?: string }> {
-    logger.info('Deleting task', { taskId });
+    logger.info('Deleting task (soft)', { taskId });
 
     try {
-        // First delete related task status logs
-        const { error: logError } = await supabase
-            .from('task_status_log')
-            .delete()
-            .eq('task_id', taskId);
-
-        if (logError) {
-            logger.warn('Failed to delete task logs', logError);
-            // Continue anyway - logs are not critical
-        }
-
-        // Delete the task itself
+        // Soft delete the task
         const { error } = await supabase
             .from('tasks')
-            .delete()
+            .update({ is_deleted: true, deleted_at: new Date().toISOString() })
             .eq('id', taskId);
 
         if (error) {
@@ -375,7 +396,7 @@ export async function deleteTask(
             return { success: false, error: error.message };
         }
 
-        logger.info('Task deleted successfully');
+        logger.info('Task soft deleted successfully');
         return { success: true };
     } catch (err: any) {
         logger.error('Task deletion exception', err);
@@ -398,20 +419,14 @@ export async function bulkDeleteTasks(
 
     for (const taskId of taskIds) {
         try {
-            // Delete related task status logs
-            await supabase
-                .from('task_status_log')
-                .delete()
-                .eq('task_id', taskId);
-
-            // Delete the task
+            // Soft delete the task
             const { error } = await supabase
                 .from('tasks')
-                .delete()
+                .update({ is_deleted: true, deleted_at: new Date().toISOString() })
                 .eq('id', taskId);
 
             if (error) {
-                logger.error('Failed to delete task in bulk operation', { taskId, error });
+                logger.error('Failed to soft delete task in bulk operation', { taskId, error });
                 failedCount++;
                 errors.push(`Task ${taskId}: ${error.message}`);
             } else {

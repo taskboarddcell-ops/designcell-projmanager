@@ -36,6 +36,7 @@ export {
     parseStagePlanFromEditor,
     fetchProjects,
     fetchProjectById,
+    adjustTaskDatesAfterHold,
     sortProjectsByYear,
     filterProjectsByYear,
     getUniqueProjectYears,

@@ -12,14 +12,14 @@ import {
   // Types
   Task, Project, User, AssignState,
 
-  // Utilities
-  esc, formatDate, getProjectYear, isAdmin,
-
   // Task Handlers
-  createTask, updateTask, deleteTask, bulkDeleteTasks, bulkAssignTasks,
+  createTask, updateTask, deleteTask, bulkDeleteTasks, bulkAssignTasks, updateTaskStatus,
 
   // Project Handlers
-  fetchProjects, sortProjectsByYear, filterProjectsByYear,
+  fetchProjects, sortProjectsByYear, filterProjectsByYear, updateProjectStatus, adjustTaskDatesAfterHold,
+
+  // Utilities
+  esc, formatDate, getProjectYear, isAdmin, canUserChangeTaskStatus,
 
   // User Handlers
   loginUser, loadSession, saveSession, clearSession,
@@ -197,11 +197,45 @@ const staticHtml = `
               <option value="Complete">Completed</option>
               <option value="All">All</option>
             </select>
-            <div style="display:flex;align-items:center;gap:8px;">
-              <label class="small muted" style="white-space:nowrap;">Due Date:</label>
-              <input id="filterDateFrom" class="input" type="date" placeholder="From" style="min-width:140px;">
-              <span class="small muted">to</span>
-              <input id="filterDateTo" class="input" type="date" placeholder="To" style="min-width:140px;">
+            <div class="search-wrap" style="min-width:240px;">
+              <span class="icon">
+                <svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 -960 960 960" width="20px" fill="currentColor">
+                  <path d="M784-120 532-372q-30 24-69 38t-83 14q-109 0-184.5-75.5T120-580q0-109 75.5-184.5T380-840q109 0 184.5 75.5T640-580q0 44-14 83t-38 69l252 252-56 56ZM380-400q75 0 127.5-52.5T560-580q0-75-52.5-127.5T380-760q-75 0-127.5 52.5T200-580q0 75 52.5 127.5T380-400Z"/>
+                </svg>
+              </span>
+              <input id="taskSearch" type="text" placeholder="Search tasks..." autocomplete="off">
+              <button id="clearTaskSearch" class="btn-icon" style="display:none;" title="Clear search">✕</button>
+            </div>
+            <div class="filter-group">
+              <select id="filterDateField" class="select tiny" title="Date field to filter by">
+                <option value="due">Due Date</option>
+                <option value="created_at">Created</option>
+                <option value="completed_at">Completed</option>
+              </select>
+              <select id="filterDatePreset" class="select tiny" title="Range presets">
+                <option value="all">All Time</option>
+                <option value="today">Today</option>
+                <option value="this-week">This Week</option>
+                <option value="last-week">Last Week</option>
+                <option value="this-month">This Month</option>
+                <option value="overdue">Overdue</option>
+                <option value="custom">Custom Range...</option>
+              </select>
+              <div id="customDateRange" style="display:none;align-items:center;gap:4px;">
+                <input id="filterDateFrom" class="input tiny" type="date">
+                <span class="small muted">-</span>
+                <input id="filterDateTo" class="input tiny" type="date">
+              </div>
+              <div style="width:1px;height:16px;background:var(--line-hair);margin:0 4px;"></div>
+              <select id="taskSortBy" class="select tiny" title="Sort order">
+                <option value="due_asc">Due: Earliest First</option>
+                <option value="due_desc">Due: Latest First</option>
+                <option value="prio_high">Priority: High First</option>
+                <option value="prio_low">Priority: Low First</option>
+                <option value="created_desc">Created: Newest First</option>
+                <option value="created_asc">Created: Oldest First</option>
+                <option value="project_asc">Project: A-Z</option>
+              </select>
             </div>
             <button id="printReportBtn" class="btn btn-primary" style="display:flex;align-items:center;gap:6px;">
               <svg xmlns="http://www.w3.org/2000/svg" height="18" width="18" viewBox="0 -960 960 960" fill="currentColor">
@@ -210,9 +244,37 @@ const staticHtml = `
               Print Report
             </button>
             <div class="spacer"></div>
-            <button id="btnBulkDelete" class="btn btn-danger" style="display:none;" title="Delete selected tasks (Admin only)">
-              Delete Selected (<span id="selectedCount">0</span>)
-            </button>
+            <div id="bulkActionBar" style="display:none; align-items:center; gap:8px; background:#f0f9ff; padding:4px 8px; border-radius:4px; border:1px solid #bae6fd;">
+              <span style="font-size:12px; font-weight:600; color:#0369a1;">Selected: <span id="selectedCount">0</span></span>
+              <div style="height:16px; width:1px; background:#bae6fd; margin:0 4px;"></div>
+              
+              <select id="bulkStatus" class="select tiny" style="width:100px;">
+                <option value="">Status...</option>
+                <option value="Pending">Pending</option>
+                <option value="In Progress">In Progress</option>
+                <option value="Complete">Complete</option>
+              </select>
+
+              <select id="bulkPriority" class="select tiny" style="width:80px;">
+                <option value="">Priority...</option>
+                <option value="High">High</option>
+                <option value="Medium">Medium</option>
+                <option value="Low">Low</option>
+              </select>
+
+              <select id="bulkAssignSelect" class="select tiny" style="width:100px;">
+                <option value="">Assign...</option>
+                <!-- Options populated via JS -->
+              </select>
+
+              <input type="date" id="bulkDueDate" class="input tiny" style="width:auto;" title="Set Due Date">
+
+              <button id="btnBulkApply" class="btn-sm btn-primary" title="Apply changes">Apply</button>
+              
+              <div style="height:16px; width:1px; background:#bae6fd; margin:0 4px;"></div>
+
+              <button id="btnBulkDelete" class="btn-sm btn-danger" title="Delete selected tasks">Delete</button>
+            </div>
             <div id="projectContext" class="small muted"></div>
           </div>
 
@@ -244,17 +306,41 @@ const staticHtml = `
               <option value="">All Assignees</option>
             </select>
             <select id="kbFilterStatus" class="select" style="min-width:180px">
-              <option value="Pending" selected>Pending</option>
+              <option value="All" selected>All</option>
+              <option value="Pending">Pending</option>
               <option value="In Progress">In Progress</option>
               <option value="Needs Revision">Needs Revision</option>
               <option value="Complete">Completed</option>
-              <option value="All">All</option>
             </select>
-            <div style="display:flex;align-items:center;gap:8px;">
-              <label class="small muted" style="white-space:nowrap;">Due Date:</label>
-              <input id="kbFilterDateFrom" class="input" type="date" placeholder="From" style="min-width:140px;">
-              <span class="small muted">to</span>
-              <input id="kbFilterDateTo" class="input" type="date" placeholder="To" style="min-width:140px;">
+            <div class="search-wrap" style="min-width:240px;">
+              <span class="icon">
+                <svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 -960 960 960" width="20px" fill="currentColor">
+                  <path d="M784-120 532-372q-30 24-69 38t-83 14q-109 0-184.5-75.5T120-580q0-109 75.5-184.5T380-840q109 0 184.5 75.5T640-580q0 44-14 83t-38 69l252 252-56 56ZM380-400q75 0 127.5-52.5T560-580q0-75-52.5-127.5T380-760q-75 0-127.5 52.5T200-580q0 75 52.5 127.5T380-400Z"/>
+                </svg>
+              </span>
+              <input id="kbTaskSearch" type="text" placeholder="Search tasks..." autocomplete="off">
+              <button id="clearKbTaskSearch" class="btn-icon" style="display:none;" title="Clear search">✕</button>
+            </div>
+            <div class="filter-group">
+              <select id="kbFilterDateField" class="select tiny" title="Date field to filter by">
+                <option value="due">Due Date</option>
+                <option value="created_at">Created</option>
+                <option value="completed_at">Completed</option>
+              </select>
+              <select id="kbFilterDatePreset" class="select tiny" title="Range presets">
+                <option value="all">All Time</option>
+                <option value="today">Today</option>
+                <option value="this-week">This Week</option>
+                <option value="last-week">Last Week</option>
+                <option value="this-month">This Month</option>
+                <option value="overdue">Overdue</option>
+                <option value="custom">Custom Range...</option>
+              </select>
+              <div id="kbCustomDateRange" style="display:none;align-items:center;gap:4px;">
+                <input id="kbFilterDateFrom" class="input tiny" type="date">
+                <span class="small muted">-</span>
+                <input id="kbFilterDateTo" class="input tiny" type="date">
+              </div>
             </div>
             <div class="spacer"></div>
           </div>
@@ -313,8 +399,16 @@ const staticHtml = `
 
         <!-- Project Structure -->
         <section id="viewStages" class="card" style="display:none">
-          <div class="row" id="layoutActions" style="margin-bottom:12px;display:none">
-            <button id="btnEditLayout" class="btn">✎ Edit Layout</button>
+          <div class="row" id="layoutActions" style="margin-bottom:12px;display:none;justify-content:space-between;align-items:center;">
+            <div style="display:flex;gap:8px;">
+              <button id="btnEditLayout" class="btn">✎ Edit Layout</button>
+            </div>
+            <button id="btnPrintChecklistDirect" class="btn btn-primary" style="display:flex;align-items:center;gap:6px;">
+              <svg xmlns="http://www.w3.org/2000/svg" height="18" width="18" viewBox="0 -960 960 960" fill="currentColor">
+                <path d="M640-640v-120H320v120h-80v-200h480v200h-80Zm-480 80h640-640Zm560 100q17 0 28.5-11.5T760-500q0-17-11.5-28.5T720-540q-17 0-28.5 11.5T680-500q0 17 11.5 28.5T720-460Zm-80 260v-160H320v160h320Zm80 80H240v-160H80v-240q0-51 35-85.5t85-34.5h560q51 0 85.5 34.5T880-520v240H720v160Zm80-240v-160q0-17-11.5-28.5T760-560H200q-17 0-28.5 11.5T160-520v160h80v-80h480v80h80Z"/>
+              </svg>
+              Print Checklist
+            </button>
           </div>
           <div id="projectInfoCard" style="display:none;margin-bottom:16px;"></div>
           <div id="stagesBox"></div>
@@ -810,6 +904,74 @@ const staticHtml = `
     </div>
   </div>
 
+  <!-- PROJECT RESUME MODAL -->
+  <div id="projectResumeModal" class="modal">
+    <div class="mc" style="max-width:520px">
+      <h3 style="margin:0 0 16px 0; display:flex; align-items:center; gap:8px;">
+        <svg xmlns="http://www.w3.org/2000/svg" height="24" width="24" viewBox="0 -960 960 960" fill="#6366f1">
+          <path d="M320-200v-560l440 280-440 280Zm80-280Zm0 134 210-134-210-134v268Z"/>
+        </svg>
+        Resume Project from Hold
+      </h3>
+      
+      <div id="projectResumeInfo" style="padding:16px; background:#f0f9ff; border-radius:8px; border:1px solid #bae6fd; margin-bottom:20px;">
+        <div style="font-weight:600; color:#0369a1; margin-bottom:8px;">Project Hold Summary</div>
+        <div class="small" style="color:#0c4a6e;">
+          <div style="margin-bottom:4px;">
+            <strong>Project:</strong> <span id="resumeProjectName"></span>
+          </div>
+          <div style="margin-bottom:4px;">
+            <strong>On hold since:</strong> <span id="resumeHoldSince"></span>
+          </div>
+          <div style="margin-bottom:4px;">
+            <strong>Duration:</strong> <span id="resumeHoldDuration"></span> days
+          </div>
+          <div style="margin-top:8px; padding-top:8px; border-top:1px solid #bae6fd;">
+            <strong>Pending/In-Progress tasks:</strong> <span id="resumeTaskCount"></span>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-bottom:20px;">
+        <label class="small" style="font-weight:600; color:#374151; margin-bottom:8px; display:block;">
+          How would you like to handle task due dates?
+        </label>
+        
+        <div style="display:flex; flex-direction:column; gap:12px;">
+          <label class="chk-line" style="padding:12px; background:#f9fafb; border-radius:6px; border:2px solid #e5e7eb; cursor:pointer; transition:all 0.2s;">
+            <input type="radio" name="resumeOption" value="shift" checked> 
+            <div style="margin-left:8px;">
+              <div style="font-weight:600; color:#172554;">Shift all due dates forward</div>
+              <div class="small muted" style="margin-top:2px;">
+                Automatically add <strong id="shiftDaysText"></strong> days to all pending/in-progress task due dates
+              </div>
+            </div>
+          </label>
+          
+          <label class="chk-line" style="padding:12px; background:#f9fafb; border-radius:6px; border:2px solid #e5e7eb; cursor:pointer; transition:all 0.2s;">
+            <input type="radio" name="resumeOption" value="keep"> 
+            <div style="margin-left:8px;">
+              <div style="font-weight:600; color:#172554;">Keep original due dates</div>
+              <div class="small muted" style="margin-top:2px;">
+                Tasks will retain their original deadlines (you can adjust manually if needed)
+              </div>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <div class="right" style="display:flex; gap:8px; justify-content:flex-end;">
+        <button id="resumeCancel" class="btn">Cancel</button>
+        <button id="resumeConfirm" class="btn btn-primary" style="display:flex; align-items:center; gap:6px;">
+          <svg xmlns="http://www.w3.org/2000/svg" height="18" width="18" viewBox="0 -960 960 960" fill="currentColor">
+            <path d="M382-240 154-468l57-57 171 171 367-367 57 57-424 424Z"/>
+          </svg>
+          Resume Project
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- WORKLOAD DETAIL MODAL -->
   <div id="workloadDetailModal" class="modal">
     <div class="mc" style="max-width:850px; width:95%; max-height:85vh; display:flex; flex-direction:column; padding:0; overflow:hidden;">
@@ -1162,6 +1324,25 @@ export default function ProjectManagerClient() {
     // We'll attach this listener once
     activityEvents.forEach(evt => document.addEventListener(evt, handleActivity));
 
+    // ---------- LOADING HELPERS ----------
+    function showLoading(message = 'Loading…') {
+      const loader = el('globalLoading');
+      const label = loader?.querySelector('.label');
+      if (loader) {
+        if (label) label.textContent = message;
+        loader.classList.add('show');
+        loader.style.display = 'flex';
+      }
+    }
+
+    function hideLoading() {
+      const loader = el('globalLoading');
+      if (loader) {
+        loader.classList.remove('show');
+        loader.style.display = 'none';
+      }
+    }
+
     let layoutEditMode = false;
     let layoutEditingProjectId: string | null = null;
     let projectLayoutEditTargetId: string | null = null;
@@ -1458,6 +1639,315 @@ export default function ProjectManagerClient() {
     // ---------- HELPERS ----------
     const el = (id: string) => container.querySelector<HTMLElement>(`#${id}`);
 
+    // ---------- FILTERING ENGINE ----------
+    function getFilterId(source: 'list' | 'kanban', base: string) {
+      if (source === 'list') return base;
+      // Kanban uses kb + Capitalized base (e.g. kbFilterAssignee)
+      return 'kb' + base.charAt(0).toUpperCase() + base.slice(1);
+    }
+
+    function getFilteredTasks(source: 'list' | 'kanban') {
+      const assigneeFilter = (el(getFilterId(source, 'filterAssignee')) as HTMLSelectElement)?.value || '';
+      const statusFilterSelection = (el(getFilterId(source, 'filterStatus')) as HTMLSelectElement)?.value || 'Pending';
+      const dateField = (el(getFilterId(source, 'filterDateField')) as HTMLSelectElement)?.value || 'due';
+      const datePreset = (el(getFilterId(source, 'filterDatePreset')) as HTMLSelectElement)?.value || 'all';
+      const dateFromEl = el(getFilterId(source, 'filterDateFrom')) as HTMLInputElement | null;
+      const dateToEl = el(getFilterId(source, 'filterDateTo')) as HTMLInputElement | null;
+      const searchQuery = (el(getFilterId(source, 'taskSearch')) as HTMLInputElement)?.value.toLowerCase().trim() || '';
+
+      const now = new Date();
+      now.setHours(0, 0, 0, 0);
+
+      let filtered = tasks.filter((t) => {
+        // Permission
+        if (!userCanSeeTask(t)) return false;
+
+        // Project filter
+        const project = projects.find(p => p.id === t.project_id || p.name === t.project_name);
+
+        // Requirement: If a project is put on hold, all tasks relating to that should be hidden
+        if (project && project.project_status === 'On Hold') {
+          return false;
+        }
+
+        if (activeProjectName && t.project_name !== activeProjectName) return false;
+
+        // Search filter
+        if (searchQuery) {
+          const searchableText = [
+            t.task || '',
+            t.description || '',
+            t.project_name || '',
+            ...(t.assignees || [])
+          ].join(' ').toLowerCase();
+
+          if (!searchableText.includes(searchQuery)) return false;
+        }
+
+        // Assignee filter
+        if (assigneeFilter) {
+          const names = t.assignees || [];
+          if (!names.includes(assigneeFilter)) return false;
+        }
+
+        // Status filter
+        if (statusFilterSelection !== 'All') {
+          // Normalize status for comparison to handle minor inconsistencies
+          const targetStatus = statusFilterSelection === 'Completed' ? 'Complete' : statusFilterSelection;
+          const taskStatus = t.status || 'Pending';
+
+          // Direct match or mapped match
+          if (taskStatus !== targetStatus &&
+            !(targetStatus === 'In Progress' && taskStatus === 'In Progress') &&
+            !(targetStatus === 'Complete' && taskStatus === 'Completed')) {
+            return false;
+          }
+        }
+
+        // Advanced Date Filtering
+        if (datePreset !== 'all') {
+          if (datePreset === 'overdue') {
+            // Overdue is special: only applies if not complete and due date < today
+            if (t.status === 'Complete') return false;
+            const dueDate = t.due ? new Date(t.due) : null;
+            if (!dueDate) return false;
+            // Set dueDate to start of day for accurate comparison
+            const dueComp = new Date(dueDate);
+            dueComp.setHours(0, 0, 0, 0);
+            if (dueComp >= now) return false;
+          } else if (datePreset === 'custom') {
+            const taskDateRaw = t[dateField];
+            const taskDate = taskDateRaw ? new Date(taskDateRaw) : null;
+            if (!taskDate) return false;
+
+            if (dateFromEl?.value) {
+              const from = new Date(dateFromEl.value);
+              from.setHours(0, 0, 0, 0);
+              if (taskDate < from) return false;
+            }
+            if (dateToEl?.value) {
+              const to = new Date(dateToEl.value);
+              to.setHours(23, 59, 59, 999);
+              if (taskDate > to) return false;
+            }
+          } else {
+            const taskDateRaw = t[dateField];
+            const taskDate = taskDateRaw ? new Date(taskDateRaw) : null;
+            if (!taskDate) return false;
+
+            let start = new Date(now);
+            let end = new Date(now);
+            end.setHours(23, 59, 59, 999);
+
+            if (datePreset === 'today') {
+              // Already set
+            } else if (datePreset === 'this-week') {
+              const day = now.getDay();
+              start.setDate(now.getDate() - day);
+              end.setDate(now.getDate() + (6 - day));
+              end.setHours(23, 59, 59, 999);
+            } else if (datePreset === 'last-week') {
+              const day = now.getDay();
+              start.setDate(now.getDate() - day - 7);
+              end.setDate(now.getDate() - day - 1);
+              end.setHours(23, 59, 59, 999);
+            } else if (datePreset === 'this-month') {
+              start = new Date(now.getFullYear(), now.getMonth(), 1);
+              end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+            }
+
+            if (taskDate < start || taskDate > end) return false;
+          }
+        }
+
+        return true;
+      });
+
+      return filtered;
+    }
+
+    function setupFilterListeners(source: 'list' | 'kanban') {
+      const elements = [
+        'filterAssignee',
+        'filterStatus',
+        'filterDateField',
+        'filterDatePreset',
+        'filterDateFrom',
+        'filterDateTo',
+        'taskSortBy'
+      ];
+
+      elements.forEach(baseId => {
+        const id = getFilterId(source, baseId);
+        const elField = el(id);
+        if (elField) {
+          elField.addEventListener('change', () => {
+            if (baseId === 'filterDatePreset') {
+              const preset = (elField as HTMLSelectElement).value;
+              const customRangeId = source === 'list' ? 'customDateRange' : 'kbCustomDateRange';
+              const customRange = el(customRangeId);
+              if (customRange) {
+                customRange.style.display = preset === 'custom' ? 'flex' : 'none';
+              }
+            }
+
+            // Cross-view sync
+            if (source === 'list') syncKanbanFiltersFromList();
+            else syncListFiltersFromKanban();
+
+            renderTasks();
+            renderKanban();
+            syncFiltersToUrl();
+          });
+        }
+      });
+
+      // Search input with debouncing
+      const searchId = getFilterId(source, 'taskSearch');
+      const searchInput = el(searchId) as HTMLInputElement;
+      const clearSearchBtnId = source === 'list' ? 'clearTaskSearch' : 'clearKbTaskSearch';
+      const clearSearchBtn = el(clearSearchBtnId);
+
+      if (searchInput) {
+        let searchTimeout: NodeJS.Timeout;
+
+        searchInput.addEventListener('input', () => {
+          // Show/hide clear button
+          if (clearSearchBtn) {
+            clearSearchBtn.style.display = searchInput.value ? 'block' : 'none';
+          }
+
+          // Debounce search
+          clearTimeout(searchTimeout);
+          searchTimeout = setTimeout(() => {
+            if (source === 'list') syncKanbanFiltersFromList();
+            else syncListFiltersFromKanban();
+
+            renderTasks();
+            renderKanban();
+            syncFiltersToUrl();
+          }, 300);
+        });
+      }
+
+      // Clear search button
+      if (clearSearchBtn && searchInput) {
+        clearSearchBtn.addEventListener('click', () => {
+          searchInput.value = '';
+          clearSearchBtn.style.display = 'none';
+
+          if (source === 'list') syncKanbanFiltersFromList();
+          else syncListFiltersFromKanban();
+
+          renderTasks();
+          renderKanban();
+          syncFiltersToUrl();
+        });
+      }
+    }
+
+    // Initialize Filter Listeners
+    setupFilterListeners('list');
+    setupFilterListeners('kanban');
+
+    // ---------- URL STATE PERSISTENCE ----------
+    function syncFiltersToUrl() {
+      const params = new URLSearchParams(window.location.search);
+
+      // Sync list filters
+      params.set('l_assignee', (el('filterAssignee') as HTMLSelectElement)?.value || '');
+      params.set('l_status', (el('filterStatus') as HTMLSelectElement)?.value || 'Pending');
+      params.set('l_search', (el('taskSearch') as HTMLInputElement)?.value || '');
+      params.set('l_dateField', (el('filterDateField') as HTMLSelectElement)?.value || 'due');
+      params.set('l_datePreset', (el('filterDatePreset') as HTMLSelectElement)?.value || 'all');
+      params.set('l_dateFrom', (el('filterDateFrom') as HTMLInputElement)?.value || '');
+      params.set('l_dateTo', (el('filterDateTo') as HTMLInputElement)?.value || '');
+
+      // Sync active tab
+      const activeTab = container.querySelector('.tab[aria-selected="true"]')?.id || 'tabTasks';
+      params.set('tab', activeTab.replace('tab', '').toLowerCase());
+
+      const newUrl = `${window.location.pathname}?${params.toString()}`;
+      window.history.replaceState({}, '', newUrl);
+    }
+
+    function loadFiltersFromUrl() {
+      const params = new URLSearchParams(window.location.search);
+
+      const setVal = (id: string, val: string) => {
+        const e = el(id);
+        if (e) (e as any).value = val;
+      };
+
+      if (params.has('l_assignee')) setVal('filterAssignee', params.get('l_assignee')!);
+      if (params.has('l_status')) setVal('filterStatus', params.get('l_status')!);
+      if (params.has('l_search')) {
+        const searchVal = params.get('l_search')!;
+        setVal('taskSearch', searchVal);
+        const clearBtn = el('clearTaskSearch');
+        if (clearBtn) clearBtn.style.display = searchVal ? 'block' : 'none';
+      }
+      if (params.has('l_dateField')) setVal('filterDateField', params.get('l_dateField')!);
+      if (params.has('l_datePreset')) {
+        const preset = params.get('l_datePreset')!;
+        setVal('filterDatePreset', preset);
+        const customRange = el('customDateRange');
+        if (customRange) customRange.style.display = preset === 'custom' ? 'flex' : 'none';
+      }
+      if (params.has('l_dateFrom')) setVal('filterDateFrom', params.get('l_dateFrom')!);
+      if (params.has('l_dateTo')) setVal('filterDateTo', params.get('l_dateTo')!);
+
+      if (params.has('tab')) {
+        const tab = params.get('tab');
+        if (tab) selectTab(tab as any);
+      }
+
+      // Apply initial render
+      setTimeout(() => {
+        syncKanbanFiltersFromList();
+        renderTasks();
+        renderKanban();
+      }, 100);
+    }
+
+    // Call load on start
+    setTimeout(loadFiltersFromUrl, 200);
+
+    // Filter sync is now handled in setupFilterListeners
+    // No need for patchSetupFilterListeners
+
+
+    // Print Checklist Direct Handler
+    const btnPrintChecklistDirect = el('btnPrintChecklistDirect');
+    if (btnPrintChecklistDirect) {
+      btnPrintChecklistDirect.addEventListener('click', () => {
+        const isAllProjects = !activeProjectName;
+        const proj = isAllProjects
+          ? null
+          : projects.find((p: any) => p.name === activeProjectName) || null;
+
+        if (!proj) {
+          toast('Please select a project first');
+          return;
+        }
+
+        // Get ALL tasks for this project (unfiltered by date/status)
+        const projTasks = tasks.filter((t: any) => t.project_id === proj.id);
+
+        generateProjectStructureReport(projTasks, {
+          selectedProjects: [proj.name],
+          showStats: true,
+          showDesc: false,
+          showRemarks: true,
+          isFullChecklist: true // Use simpler checklist header/columns
+        });
+
+        setTimeout(() => {
+          window.print();
+        }, 300);
+      });
+    }
+
     const STAGE_ORDER = [
       'Preliminary',
       'Municipal',
@@ -1738,10 +2228,23 @@ export default function ProjectManagerClient() {
     }
 
     const canEditProjectLayout = (proj: any) => {
-      if (!currentUser || !proj) return false;
-      if (isAdmin()) return true;
+      if (!currentUser || !proj) {
+        console.log('[canEditProjectLayout] Missing user or project', { currentUser, proj });
+        return false;
+      }
+      if (isAdmin()) {
+        console.log('[canEditProjectLayout] User is admin');
+        return true;
+      }
       const leads = proj.lead_ids || [];
-      return leads.includes(currentUser.staff_id);
+      const canEdit = leads.includes(currentUser.staff_id);
+      console.log('[canEditProjectLayout]', {
+        projectName: proj.name,
+        projectLeads: leads,
+        currentUserId: currentUser.staff_id,
+        canEdit
+      });
+      return canEdit;
     };
 
     // ---------- PROJECT STATUS DROPDOWN (TOP BAR) ----------
@@ -1780,22 +2283,74 @@ export default function ProjectManagerClient() {
         const proj = projects.find((p) => p.name === activeProjectName);
         if (!proj) return;
 
+        const oldStatus = proj.status || proj.project_status || 'Ongoing';
         const newStatus = projectStatusControl.value || 'Ongoing';
 
-        const { error } = await supabase
-          .from('projects')
-          .update({ status: newStatus })
-          .eq('id', proj.id);
+        if (oldStatus === newStatus) return;
 
-        if (error) {
-          console.error('Update project status error', error);
-          toast('Failed to update project status');
+        // Use the handler that tracks holds and returns duration
+        const result = await updateProjectStatus(supabase, proj.id, newStatus);
+
+        if (!result.success) {
+          console.error('Update project status error', result.error);
+          toast(result.error || 'Failed to update project status');
           updateProjectStatusControl();
           return;
         }
 
+        proj.status = newStatus;
+        proj.project_status = newStatus;
+
         toast('Project status updated');
-        proj.status = newStatus; // keep local cache in sync
+
+        // If resumed from Hold, show the resume modal
+        if (oldStatus === 'On Hold' && newStatus !== 'On Hold' && result.holdDuration > 0) {
+          // Store resume context
+          window._resumeContext = {
+            projectId: proj.id,
+            projectName: proj.name,
+            holdDuration: result.holdDuration,
+            holdSince: proj.on_hold_since
+          };
+
+          // Fill and show modal
+          const resumeModal = el('projectResumeModal');
+          const resumeProjectName = el('resumeProjectName');
+          const resumeHoldSince = el('resumeHoldSince');
+          const resumeHoldDuration = el('resumeHoldDuration');
+          const resumeTaskCount = el('resumeTaskCount');
+          const shiftDaysText = el('shiftDaysText');
+
+          if (resumeProjectName) resumeProjectName.textContent = proj.name;
+          if (resumeHoldSince) resumeHoldSince.textContent = formatDate(proj.on_hold_since);
+          if (resumeHoldDuration) resumeHoldDuration.textContent = result.holdDuration.toString();
+          if (shiftDaysText) shiftDaysText.textContent = result.holdDuration.toString();
+
+          // Count pending/in-progress tasks
+          const pendingCount = tasks.filter(t =>
+            (t.project_id === proj.id || t.project_name === proj.name) &&
+            (t.status === 'Pending' || t.status === 'In Progress')
+          ).length;
+
+          if (resumeTaskCount) resumeTaskCount.textContent = pendingCount.toString();
+
+          if (pendingCount > 0) {
+            showModal(resumeModal);
+          } else {
+            // No tasks to shift, just refresh
+            fetchProjects(supabase).then(p => { projects = p; renderProjectStructure(); });
+            renderTasks();
+            renderKanban();
+          }
+        } else {
+          // Regular update, refresh views
+          if (newStatus === 'On Hold') {
+            // If putting on hold, we should definitely refresh to hide tasks
+            fetchProjects(supabase).then(p => { projects = p; renderProjectStructure(); });
+            renderTasks();
+            renderKanban();
+          }
+        }
       });
 
     // ---------- KANBAN STATUS CHANGE ----------
@@ -1824,6 +2379,14 @@ export default function ProjectManagerClient() {
 
       if (!isAssignee(task.assignee_ids) && !isAdmin() && !isProjectLeadFor(task.project_id || '')) {
         toast('Only assignees, leads or admins can move this task');
+        kanbanUpdatingTasks.delete(taskId);
+        return;
+      }
+
+      // NEW: Check permission for status change (e.g. reverting Complete task)
+      const permission = canUserChangeTaskStatus(currentUser, task, newStatus);
+      if (!permission.allowed) {
+        toast(permission.reason || 'Permission denied');
         kanbanUpdatingTasks.delete(taskId);
         return;
       }
@@ -1873,14 +2436,19 @@ export default function ProjectManagerClient() {
 
       const prevStatus = task.status || 'Pending';
 
-      const { error } = await supabase
-        .from('tasks')
-        .update({ status: newStatus })
-        .eq('id', task.id);
+      const result = await updateTaskStatus(
+        supabase,
+        task.id,
+        newStatus,
+        undefined, // remarks
+        currentUser.staff_id, // completedBy
+        undefined, // reviewComments
+        currentUser // Passing currentUser for permission check (second check)
+      );
 
-      if (error) {
-        console.error('Kanban status update error', error);
-        toast('Failed to update status');
+      if (!result.success) {
+        console.error('Kanban status update error', result.error);
+        toast(result.error || 'Failed to update status');
         kanbanUpdatingTasks.delete(taskId);
         return;
       }
@@ -1922,7 +2490,7 @@ export default function ProjectManagerClient() {
     const bulkModal = el('bulkModal');
     const bulkProjectName = el('bulkProjectName');
     const bulkDue = el('bulkDue') as HTMLInputElement | null;
-    const bulkPriority = el('bulkPriority') as HTMLSelectElement | null;
+    // bulkPriority removed - now declared in the bulk action bar section
     const bulkAssigneesBox = el('bulkAssigneesBox');
     const bulkStagesBox = el('bulkStagesBox');
     const bulkCancel = el('bulkCancel');
@@ -2136,6 +2704,56 @@ export default function ProjectManagerClient() {
     const tabReview = el('tabReview');
     const reviewBadge = el('reviewBadge');
     const viewReview = el('viewReview');
+
+    // ---------- PROJECT RESUME MODAL HANDLERS ----------
+    const resumeCancel = el('resumeCancel');
+    const resumeConfirm = el('resumeConfirm');
+    const projectResumeModal = el('projectResumeModal');
+
+    resumeCancel && resumeCancel.addEventListener('click', () => {
+      hideModal(projectResumeModal);
+      window._resumeContext = null;
+      // Refresh to ensure views are consistent
+      renderProjectStructure();
+      renderTasks();
+      renderKanban();
+    });
+
+    resumeConfirm && resumeConfirm.addEventListener('click', async () => {
+      const context = window._resumeContext;
+      if (!context) {
+        hideModal(projectResumeModal);
+        return;
+      }
+
+      const option = (container.querySelector('input[name="resumeOption"]:checked') as HTMLInputElement)?.value;
+
+      if (option === 'shift') {
+        showLoading(`Shifting task dates by ${context.holdDuration} days...`);
+        const result = await adjustTaskDatesAfterHold(supabase, context.projectId, context.holdDuration);
+        hideLoading();
+
+        if (result.success) {
+          toast(`Successfully shifted ${result.updatedCount} tasks forward.`);
+        } else {
+          toast('Error shifting task dates: ' + result.error);
+        }
+      } else {
+        toast('Project resumed. Task dates kept as original.');
+      }
+
+      hideModal(projectResumeModal);
+      window._resumeContext = null;
+
+      // Full data refresh
+      showLoading('Refreshing data...');
+      await loadDataAfterLogin();
+      hideLoading();
+
+      renderProjectStructure();
+      renderTasks();
+      renderKanban();
+    });
     const reviewBody = el('reviewBody');
 
 
@@ -2163,8 +2781,17 @@ export default function ProjectManagerClient() {
       if (which === 'kanban') renderKanban();
       if (which === 'tasks') renderTasks();
       if (which === 'stages') renderProjectStructure();
-      if (which === 'workload') renderWorkloadAnalysis();
+      if (which === 'workload') {
+        // Ensure users are loaded before rendering workload
+        if (!allUsers || allUsers.length === 0) {
+          loadAllUsers().then(() => renderWorkloadAnalysis());
+        } else {
+          renderWorkloadAnalysis();
+        }
+      }
       if (which === 'review') renderReviewModule();
+
+      syncFiltersToUrl();
     }
 
     tabTasks && tabTasks.addEventListener('click', () => selectTab('tasks'));
@@ -2183,67 +2810,67 @@ export default function ProjectManagerClient() {
     const kbFilterStatus = el('kbFilterStatus') as HTMLSelectElement | null;
 
     function syncKanbanFiltersFromList() {
-      if (kbFilterAssignee && filterAssignee)
-        kbFilterAssignee.value = filterAssignee.value;
-      if (kbFilterStatus && filterStatus)
-        kbFilterStatus.value = filterStatus.value;
+      const fields = [
+        ['filterAssignee', 'kbFilterAssignee'],
+        ['filterStatus', 'kbFilterStatus'],
+        ['taskSearch', 'kbTaskSearch'],
+        ['filterDateField', 'kbFilterDateField'],
+        ['filterDatePreset', 'kbFilterDatePreset'],
+        ['filterDateFrom', 'kbFilterDateFrom'],
+        ['filterDateTo', 'kbFilterDateTo']
+      ];
 
-      const filterDateFromEl = el('filterDateFrom') as HTMLInputElement | null;
-      const filterDateToEl = el('filterDateTo') as HTMLInputElement | null;
-      const kbFilterDateFromEl = el('kbFilterDateFrom') as HTMLInputElement | null;
-      const kbFilterDateToEl = el('kbFilterDateTo') as HTMLInputElement | null;
+      fields.forEach(([srcId, destId]) => {
+        const src = el(srcId) as any;
+        const dest = el(destId) as any;
+        if (src && dest) dest.value = src.value;
+      });
 
-      if (kbFilterDateFromEl && filterDateFromEl)
-        kbFilterDateFromEl.value = filterDateFromEl.value;
-      if (kbFilterDateToEl && filterDateToEl)
-        kbFilterDateToEl.value = filterDateToEl.value;
+      // Update clear search button visibility
+      const kbSearch = el('kbTaskSearch') as HTMLInputElement;
+      const kbClearBtn = el('clearKbTaskSearch');
+      if (kbSearch && kbClearBtn) {
+        kbClearBtn.style.display = kbSearch.value ? 'block' : 'none';
+      }
+
+      // Update custom range visibility for kanban
+      const kbPreset = (el('kbFilterDatePreset') as HTMLSelectElement)?.value;
+      const kbCustomRange = el('kbCustomDateRange');
+      if (kbCustomRange) kbCustomRange.style.display = kbPreset === 'custom' ? 'flex' : 'none';
     }
 
-    filterAssignee &&
-      filterAssignee.addEventListener('change', () => {
-        renderTasks();
-        syncKanbanFiltersFromList();
-        renderKanban();
+    function syncListFiltersFromKanban() {
+      const fields = [
+        ['kbFilterAssignee', 'filterAssignee'],
+        ['kbFilterStatus', 'filterStatus'],
+        ['kbTaskSearch', 'taskSearch'],
+        ['kbFilterDateField', 'filterDateField'],
+        ['kbFilterDatePreset', 'filterDatePreset'],
+        ['kbFilterDateFrom', 'filterDateFrom'],
+        ['kbFilterDateTo', 'filterDateTo']
+      ];
+
+      fields.forEach(([srcId, destId]) => {
+        const src = el(srcId) as any;
+        const dest = el(destId) as any;
+        if (src && dest) dest.value = src.value;
       });
 
-    filterStatus &&
-      filterStatus.addEventListener('change', () => {
-        renderTasks();
-        syncKanbanFiltersFromList();
-        renderKanban();
-      });
+      // Update clear search button visibility
+      const listSearch = el('taskSearch') as HTMLInputElement;
+      const listClearBtn = el('clearTaskSearch');
+      if (listSearch && listClearBtn) {
+        listClearBtn.style.display = listSearch.value ? 'block' : 'none';
+      }
 
-    // Date filter event listeners
-    const filterDateFromEl = el('filterDateFrom') as HTMLInputElement | null;
-    const filterDateToEl = el('filterDateTo') as HTMLInputElement | null;
+      // Update custom range visibility for list
+      const listPreset = (el('filterDatePreset') as HTMLSelectElement)?.value;
+      const listCustomRange = el('customDateRange');
+      if (listCustomRange) listCustomRange.style.display = listPreset === 'custom' ? 'flex' : 'none';
+    }
 
-    filterDateFromEl &&
-      filterDateFromEl.addEventListener('change', () => {
-        renderTasks();
-        syncKanbanFiltersFromList();
-        renderKanban();
-      });
-
-    filterDateToEl &&
-      filterDateToEl.addEventListener('change', () => {
-        renderTasks();
-        syncKanbanFiltersFromList();
-        renderKanban();
-      });
-
-    kbFilterAssignee &&
-      kbFilterAssignee.addEventListener('change', () => renderKanban());
-    kbFilterStatus &&
-      kbFilterStatus.addEventListener('change', () => renderKanban());
-
-    // Kanban date filter event listeners
-    const kbFilterDateFromEl = el('kbFilterDateFrom') as HTMLInputElement | null;
-    const kbFilterDateToEl = el('kbFilterDateTo') as HTMLInputElement | null;
-
-    kbFilterDateFromEl &&
-      kbFilterDateFromEl.addEventListener('change', () => renderKanban());
-    kbFilterDateToEl &&
-      kbFilterDateToEl.addEventListener('change', () => renderKanban());
+    // Filter listeners already initialized earlier (lines 1768-1769)
+    // Removed duplicate calls to prevent multiple event listener registrations
 
     // ---------- USER MANAGEMENT ----------
     const userManagementEntry = el('userManagementEntry');
@@ -2731,6 +3358,7 @@ export default function ProjectManagerClient() {
             if (viewStages && viewStages.style.display !== 'none') {
               renderProjectStructure();
             }
+            syncFiltersToUrl();
           });
         }
 
@@ -2760,6 +3388,7 @@ export default function ProjectManagerClient() {
         if (viewStages && viewStages.style.display !== 'none') {
           renderProjectStructure();
         }
+        syncFiltersToUrl();
         updateProjectStatusControl();
       });
 
@@ -2999,7 +3628,7 @@ export default function ProjectManagerClient() {
       // Calculate aggregate data for top cards
       const activeTasksList = tasks.filter(t => t.status !== 'Complete');
       const allActiveTasks = activeTasksList.length;
-      const totalCapacity = allUsers.filter(u => u.status !== 'deactivated').length * 10; // Simple baseline
+      const totalCapacity = allUsers.filter(u => u.status !== 'deactivated').length * 20; // 20 tasks per person baseline
       const workloadPercentage = totalCapacity > 0 ? Math.round((allActiveTasks / totalCapacity) * 100) : 0;
 
       // 2. Render Top Summary Cards
@@ -3343,58 +3972,32 @@ export default function ProjectManagerClient() {
       if (!body) return;
       body.innerHTML = '';
 
-      const assigneeFilter = (filterAssignee && filterAssignee.value) || '';
-      const statusFilter = (filterStatus && filterStatus.value) || 'Pending';
-      const filterDateFromEl = el('filterDateFrom') as HTMLInputElement | null;
-      const filterDateToEl = el('filterDateTo') as HTMLInputElement | null;
-      const dateFrom = filterDateFromEl?.value || '';
-      const dateTo = filterDateToEl?.value || '';
-
-      const visible = tasks.filter((t) => {
-        // Permission
-        if (!userCanSeeTask(t)) return false;
-
-        // Project filter
-        if (activeProjectName && t.project_name !== activeProjectName) return false;
-
-        // Assignee filter
-        if (assigneeFilter) {
-          const list = t.assignees || [];
-          if (!list.includes(assigneeFilter)) return false;
-        }
-
-        // Date range filter
-        if (dateFrom || dateTo) {
-          const taskDate = t.due ? new Date(t.due) : null;
-          if (!taskDate) return false;
-
-          if (dateFrom) {
-            const fromDate = new Date(dateFrom);
-            if (taskDate < fromDate) return false;
-          }
-
-          if (dateTo) {
-            const toDate = new Date(dateTo);
-            toDate.setHours(23, 59, 59, 999); // Include the entire end date
-            if (taskDate > toDate) return false;
-          }
-        }
-
-        // Status filter
-        if (statusFilter === 'All') return true;
-
-        // Normalize status (UI 'Completed' -> DB 'Complete')
-        const targetStatus = statusFilter === 'Completed' ? 'Complete' : statusFilter;
-        const taskStatus = t.status || 'Pending';
-
-        return taskStatus === targetStatus;
-      });
+      const visible = getFilteredTasks('list');
+      const sortSelect = el('taskSortBy') as HTMLSelectElement | null;
+      const sortVal = sortSelect ? sortSelect.value : 'due_asc';
 
       visible
         .sort((a, b) => {
-          const da = a.due ? new Date(a.due) : new Date(8640000000000000);
-          const db = b.due ? new Date(b.due) : new Date(8640000000000000);
-          return da.getTime() - db.getTime();
+          if (sortVal === 'due_asc' || sortVal === 'due_desc') {
+            const da = a.due ? new Date(a.due) : new Date(8640000000000000); // far future
+            const db = b.due ? new Date(b.due) : new Date(8640000000000000);
+            return sortVal === 'due_asc' ? da.getTime() - db.getTime() : db.getTime() - da.getTime();
+          }
+          if (sortVal === 'prio_high' || sortVal === 'prio_low') {
+            const pMap: any = { 'High': 3, 'Medium': 2, 'Low': 1 };
+            const pa = pMap[a.priority] || 0;
+            const pb = pMap[b.priority] || 0;
+            return sortVal === 'prio_high' ? pb - pa : pa - pb;
+          }
+          if (sortVal === 'created_desc' || sortVal === 'created_asc') {
+            const da = a.created_at ? new Date(a.created_at) : new Date(0);
+            const db = b.created_at ? new Date(b.created_at) : new Date(0);
+            return sortVal === 'created_desc' ? db.getTime() - da.getTime() : da.getTime() - db.getTime();
+          }
+          if (sortVal === 'project_asc') {
+            return (a.project_name || '').localeCompare(b.project_name || '');
+          }
+          return 0;
         })
         .forEach((t) => {
           const tr = document.createElement('tr');
@@ -3475,49 +4078,7 @@ export default function ProjectManagerClient() {
       colRevision.innerHTML = '';
       colDone.innerHTML = '';
 
-      const assigneeFilter = (kbFilterAssignee && kbFilterAssignee.value) || '';
-      const statusFilter = (kbFilterStatus && kbFilterStatus.value) || 'Pending';
-      const kbFilterDateFromEl = el('kbFilterDateFrom') as HTMLInputElement | null;
-      const kbFilterDateToEl = el('kbFilterDateTo') as HTMLInputElement | null;
-      const dateFrom = kbFilterDateFromEl?.value || '';
-      const dateTo = kbFilterDateToEl?.value || '';
-
-      const filtered = tasks.filter((t) => {
-        if (!userCanSeeTask(t)) return false;
-        if (activeProjectName && t.project_name !== activeProjectName) return false;
-
-        if (assigneeFilter) {
-          const list = t.assignees || [];
-          if (!list.includes(assigneeFilter)) return false;
-        }
-
-        // Date range filter
-        if (dateFrom || dateTo) {
-          const taskDate = t.due ? new Date(t.due) : null;
-          if (!taskDate) return false;
-
-          if (dateFrom) {
-            const fromDate = new Date(dateFrom);
-            if (taskDate < fromDate) return false;
-          }
-
-          if (dateTo) {
-            const toDate = new Date(dateTo);
-            toDate.setHours(23, 59, 59, 999); // Include the entire end date
-            if (taskDate > toDate) return false;
-          }
-        }
-
-        if (statusFilter === 'All') return true;
-        if (statusFilter === 'Completed') return t.status === 'Complete';
-        if (statusFilter === 'In Progress') return t.status === 'In Progress';
-        if (statusFilter === 'Needs Revision') return t.status === 'Needs Revision';
-        if (statusFilter === 'Rejected') return t.status === 'Rejected';
-        if (statusFilter === 'Pending') {
-          return t.status === 'Pending' || (!t.status);
-        }
-        return t.status === statusFilter;
-      });
+      const filtered = getFilteredTasks('kanban');
 
       filtered.forEach((t) => {
         const card = document.createElement('div');
@@ -3873,8 +4434,7 @@ export default function ProjectManagerClient() {
                       const filterStatusEl = el('filterStatus') as HTMLSelectElement | null;
                       const filterSearchEl = el('filterSearch') as HTMLInputElement | null;
 
-                      if (filterStatusEl) filterStatusEl.value = '';
-                      if (filterSearchEl) filterSearchEl.value = '';
+                      if (filterStatusEl) filterStatusEl.value = 'All'; // Show all statuses so task is visible
 
                       renderTasks();
 
@@ -4054,6 +4614,8 @@ export default function ProjectManagerClient() {
           return;
         }
 
+        showLoading('Logging in…');
+
         const { data: usersData, error: usersError } = await supabase
           .from('users')
           .select('*')
@@ -4064,18 +4626,21 @@ export default function ProjectManagerClient() {
         if (usersError) {
           console.error('Login error', usersError);
           toast('Login failed (check console)');
+          hideLoading();
           return;
         }
 
         const user = usersData && usersData[0];
         if (!user) {
           toast('Invalid credentials');
+          hideLoading();
           return;
         }
 
         // Prevent deactivated users from logging in
         if (user.status === 'deactivated') {
           toast('This account has been deactivated. Please contact an administrator.');
+          hideLoading();
           return;
         }
 
@@ -4096,9 +4661,12 @@ export default function ProjectManagerClient() {
 
     // ---------- LOAD DATA AFTER LOGIN ----------
     async function loadDataAfterLogin() {
+      showLoading('Loading projects and tasks…');
+
       const { data: projData, error: projError } = await supabase
         .from('projects')
         .select('*')
+        .eq('is_deleted', false) // Filter deleted
         .order('created_at', { ascending: false });
 
       if (projError) {
@@ -4111,6 +4679,7 @@ export default function ProjectManagerClient() {
       const { data: taskData, error: taskError } = await supabase
         .from('tasks')
         .select('*')
+        .eq('is_deleted', false) // Filter deleted
         .order('due', { ascending: true });
 
       if (taskError) {
@@ -4130,6 +4699,8 @@ export default function ProjectManagerClient() {
       updateProjectStatusControl();
       refreshRoleUI();
       refreshReviewTabStatus();
+
+      hideLoading();
     }
 
     // ---------- PROJECT TYPES (TEMPLATES) ----------
@@ -5061,6 +5632,8 @@ export default function ProjectManagerClient() {
             assignees,
           };
 
+          showLoading(editingTask ? 'Updating task…' : 'Creating task…');
+
           if (editingTask) {
             let canEdit = false;
             if (currentUser) {
@@ -5091,6 +5664,7 @@ export default function ProjectManagerClient() {
             if (error) {
               console.error('Update task error', error);
               toast('Failed to update task');
+              hideLoading();
               return;
             }
 
@@ -5116,6 +5690,7 @@ export default function ProjectManagerClient() {
             if (error) {
               console.error('Create task error', error);
               toast('Failed to create task');
+              hideLoading();
               return;
             }
 
@@ -5128,7 +5703,7 @@ export default function ProjectManagerClient() {
             toast('Task created');
           }
 
-          await loadDataAfterLogin();
+          await loadDataAfterLogin(); // This already has loading indicators
         } finally {
           // Re-enable button
           (taskOK as HTMLButtonElement).disabled = false;
@@ -5493,22 +6068,52 @@ export default function ProjectManagerClient() {
         }
       });
 
-    // ---------- BULK DELETE HANDLERS ----------
+    // ---------- BULK ACTION HANDLERS ----------
     const selectAllCheckbox = el('selectAllTasks') as HTMLInputElement | null;
+    const bulkActionBar = el('bulkActionBar');
     const bulkDeleteBtn = el('btnBulkDelete');
+    const btnBulkApply = el('btnBulkApply');
     const selectedCountSpan = el('selectedCount');
     const selectAllHeader = el('selectAllHeader');
 
+    // Inputs
+    const bulkStatus = el('bulkStatus') as HTMLSelectElement | null;
+    const bulkPriority = el('bulkPriority') as HTMLSelectElement | null;
+    const bulkAssignSelect = el('bulkAssignSelect') as HTMLSelectElement | null;
+    const bulkDueDate = el('bulkDueDate') as HTMLInputElement | null;
 
+    async function populateBulkAssignSelect() {
+      if (!bulkAssignSelect || bulkAssignSelect.options.length > 1) return;
 
-    // Update selected count and button visibility
-    function updateBulkDeleteUI() {
+      // Load users if required
+      if (!allUsers || allUsers.length === 0) {
+        try {
+          await loadAllUsers();
+        } catch (e) {
+          console.error('Failed to load users for bulk assign', e);
+        }
+      }
+
+      // Populate if users loaded
+      if (allUsers && allUsers.length > 0) {
+        const activeUsers = allUsers.filter(u => u.status !== 'deactivated');
+
+        // Keep "Assign..."
+        bulkAssignSelect.innerHTML = '<option value="">Assign...</option>' +
+          activeUsers.map(u => `<option value="${esc(u.staff_id)}">${esc(u.name)}</option>`).join('');
+      }
+    }
+
+    // Update selected count and visibility
+    function updateBulkActionsUI() {
       const checkboxes = document.querySelectorAll('.task-checkbox:checked');
       const count = checkboxes.length;
 
       if (selectedCountSpan) selectedCountSpan.textContent = count.toString();
-      if (bulkDeleteBtn) {
-        bulkDeleteBtn.style.display = isAdmin() && count > 0 ? 'inline-block' : 'none';
+
+      if (bulkActionBar) {
+        bulkActionBar.style.display = isAdmin() && count > 0 ? 'flex' : 'none';
+        if (count > 0) populateBulkAssignSelect();
       }
     }
 
@@ -5517,14 +6122,14 @@ export default function ProjectManagerClient() {
       const checked = (e.target as HTMLInputElement).checked;
       const checkboxes = document.querySelectorAll('.task-checkbox') as NodeListOf<HTMLInputElement>;
       checkboxes.forEach(cb => cb.checked = checked);
-      updateBulkDeleteUI();
+      updateBulkActionsUI();
     });
 
     // Individual checkbox handler (delegated)
     tasksBody && tasksBody.addEventListener('change', (e) => {
       const target = e.target as HTMLElement;
       if (target.classList.contains('task-checkbox')) {
-        updateBulkDeleteUI();
+        updateBulkActionsUI();
 
         // Update select all checkbox state
         if (selectAllCheckbox) {
@@ -5532,6 +6137,109 @@ export default function ProjectManagerClient() {
           const checkedCheckboxes = document.querySelectorAll('.task-checkbox:checked');
           selectAllCheckbox.checked = allCheckboxes.length > 0 && allCheckboxes.length === checkedCheckboxes.length;
           selectAllCheckbox.indeterminate = checkedCheckboxes.length > 0 && checkedCheckboxes.length < allCheckboxes.length;
+        }
+      }
+    });
+
+    // Bulk Apply Handler
+    btnBulkApply && btnBulkApply.addEventListener('click', async () => {
+      if (!isAdmin()) return;
+
+      const checkedBoxes = document.querySelectorAll('.task-checkbox:checked') as NodeListOf<HTMLInputElement>;
+      const taskIds = Array.from(checkedBoxes).map(cb => cb.getAttribute('data-task-id')).filter(id => id) as string[];
+
+      if (taskIds.length === 0) return;
+
+      const updates: any = {};
+      const changes: string[] = [];
+
+      if (bulkStatus && bulkStatus.value) {
+        updates.status = bulkStatus.value;
+        changes.push(`Status: ${bulkStatus.value}`);
+      }
+      if (bulkPriority && bulkPriority.value) {
+        updates.priority = bulkPriority.value;
+        changes.push(`Priority: ${bulkPriority.value}`);
+      }
+      if (bulkDueDate && bulkDueDate.value) {
+        updates.due = bulkDueDate.value;
+        changes.push(`Due: ${bulkDueDate.value}`);
+      }
+      if (bulkAssignSelect && bulkAssignSelect.value) {
+        // Special handling for assignment
+        // We need to decide if we overwrite or append? Usually overwrite in single select.
+        // Let's assume overwrite for now with this simple UI.
+        // But wait, the task data requires IDs and Names.
+        const userId = bulkAssignSelect.value;
+        const user = allUsers.find(u => u.staff_id === userId);
+        if (user) {
+          updates.assignee_ids = [user.staff_id];
+          updates.assignees = [user.name];
+          changes.push(`Assignee: ${user.name}`);
+        }
+      }
+
+      if (changes.length === 0) {
+        toast('No changes selected to apply.');
+        return;
+      }
+
+      const confirmMsg = `Apply the following changes to ${taskIds.length} task(s)?\n\n• ${changes.join('\n• ')}`;
+      if (!confirm(confirmMsg)) return;
+
+      btnBulkApply.disabled = true;
+      btnBulkApply.textContent = 'Updating...';
+
+      try {
+        const { error } = await supabase
+          .from('tasks')
+          .update(updates)
+          .in('id', taskIds);
+
+        if (error) {
+          console.error('Bulk update error', error);
+          toast('Failed to update tasks');
+        } else {
+          toast(`Updated ${taskIds.length} tasks successfully`);
+
+          // Clear inputs
+          if (bulkStatus) bulkStatus.value = '';
+          if (bulkPriority) bulkPriority.value = '';
+          if (bulkDueDate) bulkDueDate.value = '';
+          if (bulkAssignSelect) bulkAssignSelect.value = '';
+
+          // Optimistically update local state (easiest is to reload or manually map)
+          // For simplicity/reliability, let's reload data or re-fetch.
+          // But we can also iterate.
+          tasks.forEach(t => {
+            if (taskIds.includes(t.id)) {
+              if (updates.status) t.status = updates.status;
+              if (updates.priority) t.priority = updates.priority;
+              if (updates.due) t.due = updates.due;
+              if (updates.assignee_ids) {
+                t.assignee_ids = updates.assignee_ids;
+                t.assignees = updates.assignees;
+              }
+            }
+          });
+          renderTasks();
+          renderKanban();
+
+          // Uncheck all
+          if (selectAllCheckbox) {
+            selectAllCheckbox.checked = false;
+            selectAllCheckbox.indeterminate = false;
+          }
+          document.querySelectorAll('.task-checkbox').forEach((cb: any) => cb.checked = false);
+          updateBulkActionsUI();
+        }
+      } catch (err: any) {
+        console.error('Bulk update exception', err);
+        toast('Error updating tasks');
+      } finally {
+        if (btnBulkApply) {
+          btnBulkApply.disabled = false;
+          btnBulkApply.textContent = 'Apply';
         }
       }
     });
@@ -5622,6 +6330,12 @@ export default function ProjectManagerClient() {
         const newDue = resDate.value;
         if (!newDue) {
           toast('Pick a new due date');
+          return;
+        }
+
+        // Restriction: Don't allow rescheduling completed tasks unless admin
+        if (selectedTask.status === 'Complete' && !isAdmin()) {
+          toast('Completed tasks cannot be rescheduled. Please contact an admin.');
           return;
         }
 
@@ -6099,6 +6813,14 @@ export default function ProjectManagerClient() {
           const newStatus = stSel.value || 'Pending';
           const note = stNote ? stNote.value.trim() : '';
 
+          // NEW: Check permission for status change
+          const permission = canUserChangeTaskStatus(currentUser, selectedTask, newStatus);
+          if (!permission.allowed) {
+            toast(permission.reason || 'Permission denied');
+            (stOK as HTMLButtonElement).disabled = false;
+            return;
+          }
+
           if (newStatus === 'Complete') {
             hideModal(statusModal);
             (stOK as HTMLButtonElement).disabled = false;
@@ -6126,21 +6848,26 @@ export default function ProjectManagerClient() {
           }
 
           const prevStatus = selectedTask.status || 'Pending';
-          const updatePayload: any = {
-            status: newStatus,
-            current_status: note || null,
-          };
 
-          const { error } = await supabase
-            .from('tasks')
-            .update(updatePayload)
-            .eq('id', selectedTask.id);
+          const result = await updateTaskStatus(
+            supabase,
+            selectedTask.id,
+            newStatus,
+            undefined, // remarks
+            currentUser.staff_id, // completedBy
+            undefined, // reviewComments
+            currentUser, // Passing currentUser for permission check
+            note || null // status note
+          );
 
-          if (error) {
-            console.error('Status update error', error);
-            toast('Failed to update status');
+          if (!result.success) {
+            console.error('Task status update error', result.error);
+            toast(result.error || 'Failed to update status');
+            (stOK as HTMLButtonElement).disabled = false;
             return;
           }
+
+
 
           await supabase.from('task_status_log').insert([
             {
@@ -6618,24 +7345,67 @@ export default function ProjectManagerClient() {
               if (!projId) return;
 
               try {
-                const { error } = await supabase
-                  .from('projects')
-                  .update({ project_status: newStatus })
-                  .eq('id', projId);
+                const proj = projects.find((p) => p.id === projId);
+                if (!proj) return;
 
-                if (error) {
-                  console.error('Failed to update project status', error);
-                  toast('Failed to update project status');
-                } else {
-                  const p = projects.find((p) => p.id === projId);
-                  if (p) {
-                    p.project_status = newStatus;
+                const oldStatus = proj.status || proj.project_status || 'Ongoing';
+                if (oldStatus === newStatus) return;
+
+                const result = await updateProjectStatus(supabase, proj.id, newStatus);
+
+                if (!result.success) {
+                  console.error('Failed to update project status', result.error);
+                  toast(result.error || 'Failed to update project status');
+                  renderProjectStructure(); // Reset select
+                  return;
+                }
+
+                proj.status = newStatus;
+                proj.project_status = newStatus;
+                toast('Project status updated');
+
+                // Trigger resume modal if resumed from hold
+                if (oldStatus === 'On Hold' && newStatus !== 'On Hold' && result.holdDuration > 0) {
+                  window._resumeContext = {
+                    projectId: proj.id,
+                    projectName: proj.name,
+                    holdDuration: result.holdDuration,
+                    holdSince: proj.on_hold_since
+                  };
+
+                  const resumeModal = el('projectResumeModal');
+                  const resumeProjectName = el('resumeProjectName');
+                  const resumeHoldSince = el('resumeHoldSince');
+                  const resumeHoldDuration = el('resumeHoldDuration');
+                  const resumeTaskCount = el('resumeTaskCount');
+                  const shiftDaysText = el('shiftDaysText');
+
+                  if (resumeProjectName) resumeProjectName.textContent = proj.name;
+                  if (resumeHoldSince) resumeHoldSince.textContent = formatDate(proj.on_hold_since);
+                  if (resumeHoldDuration) resumeHoldDuration.textContent = result.holdDuration.toString();
+                  if (shiftDaysText) shiftDaysText.textContent = result.holdDuration.toString();
+
+                  const pendingCount = tasks.filter(t =>
+                    (t.project_id === proj.id || t.project_name === proj.name) &&
+                    (t.status === 'Pending' || t.status === 'In Progress')
+                  ).length;
+
+                  if (resumeTaskCount) resumeTaskCount.textContent = pendingCount.toString();
+                  if (pendingCount > 0) {
+                    showModal(resumeModal);
+                  } else {
+                    await loadDataAfterLogin();
+                    renderProjectStructure();
                   }
-                  toast('Project status updated');
+                } else {
+                  // Just refresh local data
+                  await loadDataAfterLogin();
+                  renderProjectStructure();
                 }
               } catch (e) {
                 console.error('Exception updating project status', e);
                 toast('Failed to update project status');
+                renderProjectStructure();
               }
             });
           });
@@ -6667,10 +7437,13 @@ export default function ProjectManagerClient() {
               if (!confirmed) return;
 
               try {
-                // Delete project (this should cascade delete tasks due to foreign key constraints)
+                // Soft Delete project (this will logical delete tasks if we query right, but we should soft delete tasks too)
+                // First soft delete tasks to be safe/consistent
+                await supabase.from('tasks').update({ is_deleted: true, deleted_at: new Date().toISOString() }).eq('project_id', projId);
+
                 const { error } = await supabase
                   .from('projects')
-                  .delete()
+                  .update({ is_deleted: true, deleted_at: new Date().toISOString() })
                   .eq('id', projId);
 
                 if (error) {
@@ -6719,9 +7492,33 @@ export default function ProjectManagerClient() {
       // Render project info card
       renderProjectInfoCard(proj);
 
+      if (proj.project_status === 'On Hold' || proj.status === 'On Hold') {
+        stagesBox.innerHTML = `
+          <div style="text-align:center;padding:60px 20px;background:var(--bg-main);border:2px dashed var(--line-strong);border-radius:16px;margin:20px 0;">
+            <div style="font-size:48px;margin-bottom:16px;filter:grayscale(1);">⏸️</div>
+            <div style="font-weight:700;font-size:20px;color:var(--text-main);margin-bottom:12px;">This project is currently On Hold</div>
+            <p style="color:var(--text-muted);max-width:400px;margin:0 auto;line-height:1.6;">
+              All tasks and timeline activities are temporarily hidden. 
+              Change the project status back to <strong>Ongoing</strong> to resume management and visibility.
+            </p>
+          </div>
+        `;
+        if (layoutActions) layoutActions.style.display = 'none';
+        return;
+      }
+
       const canEdit = canEditProjectLayout(proj);
       if (layoutActions) {
-        layoutActions.style.display = canEdit ? '' : 'none';
+        // Show layout actions if a project is selected
+        layoutActions.style.display = 'flex';
+        // Only show edit layout to leads/admins
+        const editBtn = layoutActions.querySelector('#btnEditLayout') as HTMLElement | null;
+        console.log('[renderProjectStructure] Setting edit button visibility', {
+          editBtnExists: !!editBtn,
+          canEdit,
+          currentDisplay: editBtn?.style.display
+        });
+        if (editBtn) editBtn.style.display = canEdit ? 'block' : 'none';
       }
 
       if (!layoutEditMode) {
@@ -6997,6 +7794,13 @@ export default function ProjectManagerClient() {
       if (tabReports) tabReports.style.display = isAdminUser ? "flex" : "none";
       if (tabWorkload) tabWorkload.style.display = isAdminUser ? "flex" : "none";
       if (!currentUser && tabReview) tabReview.style.display = "none";
+
+      // Sidebar entries
+      const userManagementEntry = el("userManagementEntry");
+      const reportsEntry = el("reportsEntry");
+      if (userManagementEntry) userManagementEntry.style.display = isAdminUser ? "block" : "none";
+      if (reportsEntry) reportsEntry.style.display = isAdminUser ? "block" : "none";
+
       const btnEditLayout = el("btnEditLayout");
       if (btnEditLayout) btnEditLayout.style.display = isAdminUser ? "" : "none";
       const selectAllHeader = container.querySelector(".chk-col-header") as HTMLElement;
@@ -7642,7 +8446,7 @@ export default function ProjectManagerClient() {
       // Update report title
       const reportTitle = container.querySelector('.report-header h1');
       if (reportTitle) {
-        reportTitle.textContent = 'Project Structure Report';
+        reportTitle.textContent = options.isFullChecklist ? 'Project Checklist' : 'Project Structure Report';
       }
 
       // Show applied filters
@@ -7701,15 +8505,25 @@ export default function ProjectManagerClient() {
         }
 
         // Update header for checklist format with assignment and completion dates
-        thead.innerHTML = `
-          <th style="border:1px solid #000;padding:4px 3px;background:#f0f0f0;width:30px;text-align:center;">✓</th>
-          <th style="border:1px solid #000;padding:4px 3px;background:#f0f0f0;">Task / Stage</th>
-          <th style="border:1px solid #000;padding:4px 3px;background:#f0f0f0;width:120px;">Assignees</th>
-          <th style="border:1px solid #000;padding:4px 3px;background:#f0f0f0;width:80px;">Assigned</th>
-          <th style="border:1px solid #000;padding:4px 3px;background:#f0f0f0;width:80px;">Due</th>
-          <th style="border:1px solid #000;padding:4px 3px;background:#f0f0f0;width:80px;">Completed</th>
-          <th style="border:1px solid #000;padding:4px 3px;background:#f0f0f0;width:80px;">Status</th>
-        `;
+        if (options.isFullChecklist) {
+          thead.innerHTML = `
+            <th style="border:1px solid #000;padding:4px 3px;background:#f0f0f0;width:30px;text-align:center;">✓</th>
+            <th style="border:1px solid #000;padding:4px 3px;background:#f0f0f0;">Task / Stage</th>
+            <th style="border:1px solid #000;padding:4px 3px;background:#f0f0f0;width:120px;">Assignees</th>
+            <th style="border:1px solid #000;padding:4px 3px;background:#f0f0f0;width:80px;">Due</th>
+            <th style="border:1px solid #000;padding:4px 3px;background:#f0f0f0;width:90px;">Status</th>
+          `;
+        } else {
+          thead.innerHTML = `
+            <th style="border:1px solid #000;padding:4px 3px;background:#f0f0f0;width:30px;text-align:center;">✓</th>
+            <th style="border:1px solid #000;padding:4px 3px;background:#f0f0f0;">Task / Stage</th>
+            <th style="border:1px solid #000;padding:4px 3px;background:#f0f0f0;width:120px;">Assignees</th>
+            <th style="border:1px solid #000;padding:4px 3px;background:#f0f0f0;width:80px;">Assigned</th>
+            <th style="border:1px solid #000;padding:4px 3px;background:#f0f0f0;width:80px;">Due</th>
+            <th style="border:1px solid #000;padding:4px 3px;background:#f0f0f0;width:80px;">Completed</th>
+            <th style="border:1px solid #000;padding:4px 3px;background:#f0f0f0;width:80px;">Status</th>
+          `;
+        }
 
         // Generate rows for each selected project
         selectedProjectsData.forEach(project => {
@@ -7725,7 +8539,7 @@ export default function ProjectManagerClient() {
           if (leadNames) projectMeta.push(`Lead: ${leadNames}`);
 
           projectRow.innerHTML = `
-            <td colspan="7" style="border:1px solid #000;padding:6px 3px;background:#1f2937;color:white;">
+            <td colspan="${options.isFullChecklist ? 5 : 7}" style="border:1px solid #000;padding:6px 3px;background:#1f2937;color:white;">
               <div style="display:flex;justify-content:space-between;align-items:center;">
                 <span style="font-weight:bold;font-size:9pt;">${esc(project.name)}</span>
                 <span style="font-size:7pt;font-weight:normal;opacity:0.9;">${esc(projectMeta.join(' | '))}</span>
@@ -7744,7 +8558,7 @@ export default function ProjectManagerClient() {
             const stageName = typeof stage === 'string' ? stage : (stage.stage || stage.name || stage.title || 'Unknown Stage');
             const stageRow = document.createElement('tr');
             stageRow.innerHTML = `
-              <td colspan="7" style="border:1px solid #000;padding:5px 3px 5px 12px;background:#e5e7eb;font-weight:bold;font-size:8pt;">
+              <td colspan="${options.isFullChecklist ? 5 : 7}" style="border:1px solid #000;padding:5px 3px 5px 12px;background:#e5e7eb;font-weight:bold;font-size:8pt;">
                 ${esc(stageName)}
               </td>
             `;
@@ -7757,7 +8571,7 @@ export default function ProjectManagerClient() {
               // Sub-stage header row
               const subStageRow = document.createElement('tr');
               subStageRow.innerHTML = `
-                <td colspan="7" style="border:1px solid #000;padding:4px 3px 4px 24px;background:#f3f4f6;font-weight:600;font-size:7.5pt;">
+                <td colspan="${options.isFullChecklist ? 5 : 7}" style="border:1px solid #000;padding:4px 3px 4px 24px;background:#f3f4f6;font-weight:600;font-size:7.5pt;">
                   ${esc(subStageName)}
                 </td>
               `;
@@ -7798,31 +8612,55 @@ export default function ProjectManagerClient() {
                     }
                   }
 
-                  row.innerHTML = `
-                    <td style="border:1px solid #000;padding:3px;text-align:center;font-size:12pt;">${getStatusCheckbox(task)}</td>
-                    <td style="border:1px solid #000;padding:3px;padding-left:36px;">${taskDetails}</td>
-                    <td style="border:1px solid #000;padding:3px;font-size:7pt;">${esc((task.assignees || []).join(', '))}</td>
-                    <td style="border:1px solid #000;padding:3px;font-size:7pt;">${task.created_at ? esc(formatDate(task.created_at)) : '-'}</td>
-                    <td style="border:1px solid #000;padding:3px;font-size:7pt;">${esc(formatDate(task.due))}</td>
-                    <td style="border:1px solid #000;padding:3px;font-size:7pt;${task.completed_at ? 'font-weight:600;color:#059669;' : ''}">${task.completed_at ? esc(formatDate(task.completed_at)) : '-'}</td>
-                    <td style="border:1px solid #000;padding:3px;font-size:7pt;">${esc(task.status || 'Pending')}</td>
-                  `;
+                  if (options.isFullChecklist) {
+                    const assigneesList = (task.assignees || []).join(', ');
+                    row.innerHTML = `
+                      <td style="border:1px solid #000;padding:3px;text-align:center;font-size:12pt;">${getStatusCheckbox(task)}</td>
+                      <td style="border:1px solid #000;padding:3px;padding-left:36px;">${taskDetails}</td>
+                      <td style="border:1px solid #000;padding:3px;font-size:7pt;">${assigneesList ? esc(assigneesList) : '<span style="color:#ef4444;font-style:italic;">(Unassigned)</span>'}</td>
+                      <td style="border:1px solid #000;padding:3px;font-size:7pt;">${esc(formatDate(task.due))}</td>
+                      <td style="border:1px solid #000;padding:3px;font-size:7pt;font-weight:${task.status === 'Complete' ? 'bold' : 'normal'}">${esc(task.status || 'Pending')}</td>
+                    `;
+                  } else {
+                    const assigneesList = (task.assignees || []).join(', ');
+                    row.innerHTML = `
+                      <td style="border:1px solid #000;padding:3px;text-align:center;font-size:12pt;">${getStatusCheckbox(task)}</td>
+                      <td style="border:1px solid #000;padding:3px;padding-left:36px;">${taskDetails}</td>
+                      <td style="border:1px solid #000;padding:3px;font-size:7pt;">${assigneesList ? esc(assigneesList) : '<span style="color:#ef4444;font-style:italic;">(Unassigned)</span>'}</td>
+                      <td style="border:1px solid #000;padding:3px;font-size:7pt;">${task.created_at ? esc(formatDate(task.created_at)) : '-'}</td>
+                      <td style="border:1px solid #000;padding:3px;font-size:7pt;">${esc(formatDate(task.due))}</td>
+                      <td style="border:1px solid #000;padding:3px;font-size:7pt;${task.completed_at ? 'font-weight:600;color:#059669;' : ''}">${task.completed_at ? esc(formatDate(task.completed_at)) : '-'}</td>
+                      <td style="border:1px solid #000;padding:3px;font-size:7pt;">${esc(task.status || 'Pending')}</td>
+                    `;
+                  }
                   tbody.appendChild(row);
                 });
               } else {
                 // Show empty sub-stage as "Unassigned" task placeholder
                 const emptyRow = document.createElement('tr');
-                emptyRow.innerHTML = `
-                  <td style="border:1px solid #000;padding:3px;text-align:center;">☐</td>
-                  <td style="border:1px solid #000;padding:3px;padding-left:36px;font-style:italic;color:#6b7280;">
-                    ${esc(subStageName)} <span style="font-size:7pt;color:#9ca3af;">(Unassigned)</span>
-                  </td>
-                  <td style="border:1px solid #000;padding:3px;text-align:center;color:#9ca3af;">-</td>
-                  <td style="border:1px solid #000;padding:3px;text-align:center;color:#9ca3af;">-</td>
-                  <td style="border:1px solid #000;padding:3px;text-align:center;color:#9ca3af;">-</td>
-                  <td style="border:1px solid #000;padding:3px;text-align:center;color:#9ca3af;">-</td>
-                  <td style="border:1px solid #000;padding:3px;font-size:7pt;color:#9ca3af;">Pending Assignment</td>
-                `;
+                if (options.isFullChecklist) {
+                  emptyRow.innerHTML = `
+                    <td style="border:1px solid #000;padding:3px;text-align:center;">☐</td>
+                    <td style="border:1px solid #000;padding:3px;padding-left:36px;font-style:italic;color:#6b7280;">
+                      ${esc(subStageName)} <span style="font-size:7pt;color:#9ca3af;">(Unassigned)</span>
+                    </td>
+                    <td style="border:1px solid #000;padding:3px;text-align:center;color:#9ca3af;">-</td>
+                    <td style="border:1px solid #000;padding:3px;text-align:center;color:#9ca3af;">-</td>
+                    <td style="border:1px solid #000;padding:3px;font-size:7pt;color:#9ca3af;">Pending Assignment</td>
+                  `;
+                } else {
+                  emptyRow.innerHTML = `
+                    <td style="border:1px solid #000;padding:3px;text-align:center;">☐</td>
+                    <td style="border:1px solid #000;padding:3px;padding-left:36px;font-style:italic;color:#6b7280;">
+                      ${esc(subStageName)} <span style="font-size:7pt;color:#9ca3af;">(Unassigned)</span>
+                    </td>
+                    <td style="border:1px solid #000;padding:3px;text-align:center;color:#9ca3af;">-</td>
+                    <td style="border:1px solid #000;padding:3px;text-align:center;color:#9ca3af;">-</td>
+                    <td style="border:1px solid #000;padding:3px;text-align:center;color:#9ca3af;">-</td>
+                    <td style="border:1px solid #000;padding:3px;text-align:center;color:#9ca3af;">-</td>
+                    <td style="border:1px solid #000;padding:3px;font-size:7pt;color:#9ca3af;">Pending Assignment</td>
+                  `;
+                }
                 tbody.appendChild(emptyRow);
               }
             });
@@ -7830,15 +8668,16 @@ export default function ProjectManagerClient() {
 
           // FALLBACK: Display unmatched tasks for this project
           const unmatchedTasks = tasksToPrint.filter(t =>
-            t.project_name === project.name && !matchedTaskIds.has(t.id)
+            t.project_id === project.id && !matchedTaskIds.has(t.id)
           );
 
           if (unmatchedTasks.length > 0) {
             // Add "Other Tasks" section header
             const otherTasksRow = document.createElement('tr');
+            const colSpan = options.isFullChecklist ? 5 : 7;
             otherTasksRow.innerHTML = `
-              <td colspan="7" style="border:1px solid #000;padding:5px 3px 5px 12px;background:#f9fafb;font-weight:bold;font-size:8pt;color:#6b7280;">
-                Other Tasks
+              <td colspan="${colSpan}" style="border:1px solid #000;padding:5px 3px 5px 12px;background:#f9fafb;font-weight:bold;font-size:8pt;color:#6b7280;">
+                Other Tasks (Not in standard plan)
               </td>
             `;
             tbody.appendChild(otherTasksRow);
@@ -7867,15 +8706,27 @@ export default function ProjectManagerClient() {
                 }
               }
 
-              row.innerHTML = `
-                <td style="border:1px solid #000;padding:3px;text-align:center;font-size:12pt;">${getStatusCheckbox(task)}</td>
-                <td style="border:1px solid #000;padding:3px;padding-left:12px;">${taskDetails}</td>
-                <td style="border:1px solid #000;padding:3px;font-size:7pt;">${esc((task.assignees || []).join(', '))}</td>
-                <td style="border:1px solid #000;padding:3px;font-size:7pt;">${task.created_at ? esc(formatDate(task.created_at)) : '-'}</td>
-                <td style="border:1px solid #000;padding:3px;font-size:7pt;">${esc(formatDate(task.due))}</td>
-                <td style="border:1px solid #000;padding:3px;font-size:7pt;${task.completed_at ? 'font-weight:600;color:#059669;' : ''}">${task.completed_at ? esc(formatDate(task.completed_at)) : '-'}</td>
-                <td style="border:1px solid #000;padding:3px;font-size:7pt;">${esc(task.status || 'Pending')}</td>
-              `;
+              if (options.isFullChecklist) {
+                const assigneesList = (task.assignees || []).join(', ');
+                row.innerHTML = `
+                  <td style="border:1px solid #000;padding:3px;text-align:center;font-size:12pt;">${getStatusCheckbox(task)}</td>
+                  <td style="border:1px solid #000;padding:3px;padding-left:12px;">${taskDetails}</td>
+                  <td style="border:1px solid #000;padding:3px;font-size:7pt;">${assigneesList ? esc(assigneesList) : '<span style="color:#ef4444;font-style:italic;">(Unassigned)</span>'}</td>
+                  <td style="border:1px solid #000;padding:3px;font-size:7pt;">${esc(formatDate(task.due))}</td>
+                  <td style="border:1px solid #000;padding:3px;font-size:7pt;">${esc(task.status || 'Pending')}</td>
+                `;
+              } else {
+                const assigneesList = (task.assignees || []).join(', ');
+                row.innerHTML = `
+                  <td style="border:1px solid #000;padding:3px;text-align:center;font-size:12pt;">${getStatusCheckbox(task)}</td>
+                  <td style="border:1px solid #000;padding:3px;padding-left:12px;">${taskDetails}</td>
+                  <td style="border:1px solid #000;padding:3px;font-size:7pt;">${assigneesList ? esc(assigneesList) : '<span style="color:#ef4444;font-style:italic;">(Unassigned)</span>'}</td>
+                  <td style="border:1px solid #000;padding:3px;font-size:7pt;">${task.created_at ? esc(formatDate(task.created_at)) : '-'}</td>
+                  <td style="border:1px solid #000;padding:3px;font-size:7pt;">${esc(formatDate(task.due))}</td>
+                  <td style="border:1px solid #000;padding:3px;font-size:7pt;${task.completed_at ? 'font-weight:600;color:#059669;' : ''}">${task.completed_at ? esc(formatDate(task.completed_at)) : '-'}</td>
+                  <td style="border:1px solid #000;padding:3px;font-size:7pt;">${esc(task.status || 'Pending')}</td>
+                `;
+              }
               tbody.appendChild(row);
             });
           }

@@ -121,12 +121,13 @@ export async function updateProject(
 
 /**
  * Update project status
+ * Now tracks hold/resume timestamps and calculates hold duration
  */
 export async function updateProjectStatus(
     supabase: SupabaseClient,
     projectId: string,
     newStatus: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; holdDuration?: number }> {
     logger.info('Updating project status', { projectId, newStatus });
 
     if (!['Ongoing', 'On Hold', 'Complete'].includes(newStatus)) {
@@ -134,9 +135,57 @@ export async function updateProjectStatus(
     }
 
     try {
+        // First, fetch the current project to check current status
+        const { data: currentProject, error: fetchError } = await supabase
+            .from('projects')
+            .select('*')
+            .eq('id', projectId)
+            .single();
+
+        if (fetchError || !currentProject) {
+            logger.error('Failed to fetch project for status update', fetchError);
+            return { success: false, error: 'Project not found' };
+        }
+
+        const updateData: any = { project_status: newStatus };
+        let holdDuration = 0;
+
+        // Handle "On Hold" status
+        if (newStatus === 'On Hold' && currentProject.project_status !== 'On Hold') {
+            // Project is being put on hold
+            updateData.on_hold_since = new Date().toISOString();
+            logger.info('Project put on hold', { projectId, timestamp: updateData.on_hold_since });
+        }
+
+        // Handle resume from "On Hold"
+        if (currentProject.project_status === 'On Hold' && newStatus !== 'On Hold') {
+            // Project is being resumed
+            updateData.last_resumed_at = new Date().toISOString();
+
+            // Calculate hold duration if on_hold_since exists
+            if (currentProject.on_hold_since) {
+                const holdStart = new Date(currentProject.on_hold_since);
+                const holdEnd = new Date();
+                const daysOnHold = Math.ceil((holdEnd.getTime() - holdStart.getTime()) / (1000 * 60 * 60 * 24));
+
+                // Add to cumulative hold duration
+                holdDuration = (currentProject.hold_duration || 0) + daysOnHold;
+                updateData.hold_duration = holdDuration;
+
+                logger.info('Project resumed from hold', {
+                    projectId,
+                    daysOnHold,
+                    totalHoldDuration: holdDuration
+                });
+            }
+
+            // Clear on_hold_since
+            updateData.on_hold_since = null;
+        }
+
         const { error } = await supabase
             .from('projects')
-            .update({ project_status: newStatus })
+            .update(updateData)
             .eq('id', projectId);
 
         if (error) {
@@ -145,7 +194,7 @@ export async function updateProjectStatus(
         }
 
         logger.info('Project status updated successfully');
-        return { success: true };
+        return { success: true, holdDuration };
     } catch (err: any) {
         logger.error('Project status update exception', err);
         return { success: false, error: err.message || 'Unknown error' };
@@ -159,24 +208,24 @@ export async function deleteProject(
     supabase: SupabaseClient,
     projectId: string
 ): Promise<{ success: boolean; error?: string }> {
-    logger.info('Deleting project', { projectId });
+    logger.info('Deleting project (soft)', { projectId });
 
     try {
-        // First delete related tasks
+        // Soft delete related tasks
         const { error: tasksError } = await supabase
             .from('tasks')
-            .delete()
+            .update({ is_deleted: true, deleted_at: new Date().toISOString() })
             .eq('project_id', projectId);
 
         if (tasksError) {
-            logger.warn('Error deleting related tasks', tasksError);
+            logger.warn('Error soft deleting related tasks', tasksError);
             // Continue anyway
         }
 
-        // Delete the project
+        // Soft delete the project
         const { error } = await supabase
             .from('projects')
-            .delete()
+            .update({ is_deleted: true, deleted_at: new Date().toISOString() })
             .eq('id', projectId);
 
         if (error) {
@@ -184,7 +233,7 @@ export async function deleteProject(
             return { success: false, error: error.message };
         }
 
-        logger.info('Project deleted successfully');
+        logger.info('Project soft deleted successfully');
         return { success: true };
     } catch (err: any) {
         logger.error('Project deletion exception', err);
@@ -267,6 +316,7 @@ export async function fetchProjects(
         const { data, error } = await supabase
             .from('projects')
             .select('*')
+            .eq('is_deleted', false) // Filter out deleted projects
             .order('name', { ascending: true });
 
         if (error) {
@@ -307,6 +357,64 @@ export async function fetchProjectById(
     } catch (err: any) {
         logger.error('Fetch project exception', err);
         return { success: false, error: err.message };
+    }
+}
+
+/**
+ * Adjust task due dates after project hold
+ * Shifts all pending/in-progress task due dates forward by the hold duration
+ */
+export async function adjustTaskDatesAfterHold(
+    supabase: SupabaseClient,
+    projectId: string,
+    daysToShift: number
+): Promise<{ success: boolean; updatedCount: number; error?: string }> {
+    logger.info('Adjusting task dates after hold', { projectId, daysToShift });
+
+    try {
+        // Fetch all pending/in-progress tasks for this project
+        const { data: tasks, error: fetchError } = await supabase
+            .from('tasks')
+            .select('*')
+            .eq('project_id', projectId)
+            .in('status', ['Pending', 'In Progress'])
+            .eq('is_deleted', false);
+
+        if (fetchError) {
+            logger.error('Failed to fetch tasks for date adjustment', fetchError);
+            return { success: false, updatedCount: 0, error: fetchError.message };
+        }
+
+        if (!tasks || tasks.length === 0) {
+            logger.info('No tasks to adjust');
+            return { success: true, updatedCount: 0 };
+        }
+
+        let updatedCount = 0;
+
+        // Update each task's due date
+        for (const task of tasks) {
+            const currentDue = new Date(task.due);
+            const newDue = new Date(currentDue);
+            newDue.setDate(newDue.getDate() + daysToShift);
+
+            const { error: updateError } = await supabase
+                .from('tasks')
+                .update({ due: newDue.toISOString().split('T')[0] })
+                .eq('id', task.id);
+
+            if (updateError) {
+                logger.error('Failed to update task date', { taskId: task.id, error: updateError });
+            } else {
+                updatedCount++;
+            }
+        }
+
+        logger.info('Task dates adjusted', { updatedCount, totalTasks: tasks.length });
+        return { success: true, updatedCount };
+    } catch (err: any) {
+        logger.error('Adjust task dates exception', err);
+        return { success: false, updatedCount: 0, error: err.message };
     }
 }
 

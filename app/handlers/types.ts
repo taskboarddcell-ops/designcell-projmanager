@@ -27,6 +27,9 @@ export interface Project {
     project_status?: string;
     status?: string;
     created_at?: string;
+    on_hold_since?: string;
+    hold_duration?: number;
+    last_resumed_at?: string;
 }
 
 export interface StagePlan {
@@ -57,6 +60,7 @@ export interface Task {
     reschedule_remarks?: string;
     completion_remarks?: string;
     review_comments?: string;
+    previous_status?: string;
     created_at?: string;
     created_by_id?: string;
     created_by_name?: string;
@@ -263,3 +267,36 @@ export function canEditProject(user: User | null, project: Project | null): bool
     if (isAdmin(user)) return true;
     return isProjectLead(user, project);
 }
+
+/**
+ * Check if user can change task status from current to new status
+ * Restriction: Only admins can change completed tasks back to Pending or In Progress
+ */
+export function canUserChangeTaskStatus(
+    user: User | null,
+    task: Task | null,
+    newStatus: string
+): { allowed: boolean; reason?: string } {
+    if (!user || !task) {
+        return { allowed: false, reason: 'Invalid user or task' };
+    }
+
+    const currentStatus = task.status;
+
+    // If task is currently Complete
+    if (currentStatus === 'Complete') {
+        // Only admins can revert completed tasks to Pending or In Progress
+        if (newStatus === 'Pending' || newStatus === 'In Progress') {
+            if (!isAdmin(user)) {
+                return {
+                    allowed: false,
+                    reason: 'Only administrators can revert completed tasks to Pending or In Progress. Please contact an admin if this task needs to be reopened.',
+                };
+            }
+        }
+    }
+
+    // All other status changes are allowed
+    return { allowed: true };
+}
+
