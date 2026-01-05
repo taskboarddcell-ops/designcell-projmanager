@@ -89,7 +89,7 @@ const staticHtml = `
         <div class="sec-title">Projects</div>
 
         <div class="proj-list">
-          <div style="position: sticky; top: 0; background: var(--bg-sidebar); z-index: 10; padding-bottom: 4px;">
+          <div style="position: sticky; top: 0; background: var(--bg-sidebar); z-index: 10; padding-top: 8px; padding-bottom: 4px;">
             <div class="search-wrap">
               <span class="icon">
                 <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#e3e3e3">
@@ -412,7 +412,7 @@ const staticHtml = `
               Print Checklist
             </button>
           </div>
-          <div id="projectInfoCard" style="display:none;margin-bottom:8px;position:sticky;top:0;background:var(--bg-main);z-index:5;padding-top:4px;"></div>
+          <div id="projectInfoCard" style="display:none;margin-bottom:8px;position:sticky;top:0;background:var(--bg-main);z-index:5;padding-top:12px;padding-bottom:4px;"></div>
           <div id="stagesBox"></div>
         </section>
 
