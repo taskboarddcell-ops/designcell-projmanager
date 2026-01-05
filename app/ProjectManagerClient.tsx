@@ -89,15 +89,17 @@ const staticHtml = `
         <div class="sec-title">Projects</div>
 
         <div class="proj-list">
-          <div class="search-wrap">
-            <span class="icon">
-              <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#e3e3e3">
-                <path d="M784-120 532-372q-30 24-69 38t-83 14q-109 0-184.5-75.5T120-580q0-109 75.5-184.5T380-840q109 0 184.5 75.5T640-580q0 44-14 83t-38 69l252 252-56 56ZM380-400q75 0 127.5-52.5T560-580q0-75-52.5-127.5T380-760q-75 0-127.5 52.5T200-580q0 75 52.5 127.5T380-400Z"/>
-              </svg>
-            </span>
-            <input id="projSearch" type="text" placeholder="Search projects..." autocomplete="off">
+          <div style="position: sticky; top: 0; background: var(--bg-sidebar); z-index: 10; padding-bottom: 8px;">
+            <div class="search-wrap">
+              <span class="icon">
+                <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#e3e3e3">
+                  <path d="M784-120 532-372q-30 24-69 38t-83 14q-109 0-184.5-75.5T120-580q0-109 75.5-184.5T380-840q109 0 184.5 75.5T640-580q0 44-14 83t-38 69l252 252-56 56ZM380-400q75 0 127.5-52.5T560-580q0-75-52.5-127.5T380-760q-75 0-127.5 52.5T200-580q0 75 52.5 127.5T380-400Z"/>
+                </svg>
+              </span>
+              <input id="projSearch" type="text" placeholder="Search projects..." autocomplete="off">
+            </div>
+            <button id="btnAllProjects" class="btn" style="width:100%; margin-top:8px;">All Projects</button>
           </div>
-          <button id="btnAllProjects" class="btn" style="width:100%; margin-bottom:8px;">All Projects</button>
           <div id="projList"></div>
         </div>
       </div>
@@ -410,7 +412,7 @@ const staticHtml = `
               Print Checklist
             </button>
           </div>
-          <div id="projectInfoCard" style="display:none;margin-bottom:16px;"></div>
+          <div id="projectInfoCard" style="display:none;margin-bottom:16px;position:sticky;top:0;background:var(--bg-main);z-index:5;padding-top:8px;"></div>
           <div id="stagesBox"></div>
         </section>
 
