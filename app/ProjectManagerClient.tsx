@@ -7803,7 +7803,7 @@ export default function ProjectManagerClient() {
 
       const btnEditLayout = el("btnEditLayout");
       if (btnEditLayout) btnEditLayout.style.display = isAdminUser ? "" : "none";
-      const selectAllHeader = container.querySelector(".chk-col-header") as HTMLElement;
+      const selectAllHeader = el("selectAllHeader");
       if (selectAllHeader) selectAllHeader.style.display = isAdminUser ? "table-cell" : "none";
     }
     const keyHandler = (e: KeyboardEvent) => {
