@@ -4353,6 +4353,38 @@ export default function ProjectManagerClient() {
         const data = await response.json();
         const { notifications, unread_count } = data;
 
+        // Sync tasks from notifications (if missing locally)
+        const missingIds = new Set();
+        (notifications || []).forEach((n) => {
+          if (n.link_url && n.link_url.startsWith('/tasks/')) {
+            const tid = n.link_url.replace('/tasks/', '');
+            if (tid && tid !== 'undefined' && !tasks.find((t) => t.id === tid)) {
+              missingIds.add(tid);
+            }
+          }
+        });
+
+        if (missingIds.size > 0) {
+          const { data: missingTasks } = await supabase
+            .from('tasks')
+            .select('*')
+            .in('id', Array.from(missingIds));
+
+          if (missingTasks && missingTasks.length > 0) {
+            let added = false;
+            missingTasks.forEach((mt) => {
+              if (!tasks.find((t) => t.id === mt.id)) {
+                tasks.push(mt);
+                added = true;
+              }
+            });
+            if (added) {
+              renderTasks();
+              renderKanban();
+            }
+          }
+        }
+
         // Update badge
         if (notificationBadge) {
           if (unread_count > 0) {
