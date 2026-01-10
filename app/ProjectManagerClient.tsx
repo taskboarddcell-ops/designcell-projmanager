@@ -3348,6 +3348,11 @@ export default function ProjectManagerClient() {
         const projName = item.querySelector('.proj-name');
         if (projName) {
           projName.addEventListener('click', () => {
+            // Reset layout edit mode to prevent accidental overwrites
+            layoutEditMode = false;
+            layoutEditingProjectId = null;
+            projectLayoutEditTargetId = null;
+
             activeProjectName = item.getAttribute('data-name') || '';
             if (contextInfo) {
               contextInfo.textContent = activeProjectName
@@ -3382,6 +3387,11 @@ export default function ProjectManagerClient() {
     projSearch && projSearch.addEventListener('input', buildProjectSidebar);
     btnAllProjects &&
       btnAllProjects.addEventListener('click', () => {
+        // Reset layout edit mode
+        layoutEditMode = false;
+        layoutEditingProjectId = null;
+        projectLayoutEditTargetId = null;
+
         activeProjectName = '';
         if (contextInfo) contextInfo.textContent = 'All Projects';
         buildProjectSidebar();
