@@ -788,6 +788,7 @@ const staticHtml = `
           <option value="assigned">Assigned Tasks (during time period)</option>
           <option value="completed">Completed Tasks (during time period)</option>
           <option value="all">All Tasks (assigned OR completed during period)</option>
+          <option value="kanban">Kanban Board View (active + completed in period)</option>
         </select>
         <div id="pwFilterModeDesc" class="small muted" style="margin-top:6px; padding:8px; background:#fff; border-radius:4px; font-style:italic;">
           Shows all tasks that were assigned (created) during the selected date range. Excludes completed tasks.
@@ -8002,6 +8003,14 @@ export default function ProjectManagerClient() {
           setStatus('Needs Revision', false);
           setStatus('Rejected', false);
           setStatus('Complete', true);
+        } else if (mode === 'kanban') {
+          pwFilterModeDesc.textContent = 'Shows ALL current Pending and In Progress tasks (no date filter), plus all Completed tasks during the selected date range.';
+          // Active tasks + completed in range
+          setStatus('Pending', true);
+          setStatus('In Progress', true);
+          setStatus('Needs Revision', false);
+          setStatus('Rejected', false);
+          setStatus('Complete', true);
         } else if (mode === 'all') {
           pwFilterModeDesc.textContent = 'Shows all tasks that were either assigned OR completed during the selected date range.';
           // All statuses
@@ -8211,6 +8220,27 @@ export default function ProjectManagerClient() {
               return false; // No completed_at? Exclude
             }
             return true; // No date filter, include all completed
+          }
+          else if (filterMode === 'kanban') {
+            // Kanban Board View: ALL Pending/In Progress tasks + Completed tasks in date range
+            if (status === 'Pending' || status === 'In Progress') {
+              // Include all active tasks regardless of date
+              return true;
+            } else if (isComplete) {
+              // For completed tasks, apply date filter
+              if (dateFrom || dateTo) {
+                if (t.completed_at) {
+                  const completedDate = new Date(t.completed_at);
+                  if (dateFrom && completedDate < new Date(dateFrom)) return false;
+                  if (dateTo && completedDate > new Date(dateTo + 'T23:59:59')) return false;
+                  return true;
+                }
+                return false; // No completed_at? Exclude
+              }
+              return true; // No date filter, include all completed
+            }
+            // Other statuses (Needs Revision, Rejected) - exclude unless in status filter
+            return false;
           }
           else if (filterMode === 'all') {
             // All Tasks Mode: Show tasks assigned OR completed in the range
