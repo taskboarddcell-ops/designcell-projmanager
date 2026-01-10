@@ -1680,6 +1680,7 @@ export default function ProjectManagerClient() {
             t.task || '',
             t.description || '',
             t.project_name || '',
+            t.id || '',
             ...(t.assignees || [])
           ].join(' ').toLowerCase();
 
@@ -4030,6 +4031,9 @@ export default function ProjectManagerClient() {
           <td>${esc(t.project_name || '')}</td>
           <td>
             ${esc(t.task)}
+            ${t.created_at && (new Date().getTime() - new Date(t.created_at).getTime() < 86400000)
+              ? '<span style="background:#dbeafe; color:#1e40af; font-size:10px; padding:1px 4px; border-radius:3px; margin-left:6px; font-weight:700; border:1px solid #bfdbfe;">NEW</span>'
+              : ''}
             ${t.current_status
               ? `<div class="small muted">${esc(t.current_status)}</div>`
               : ''
@@ -4740,7 +4744,8 @@ export default function ProjectManagerClient() {
         .from('tasks')
         .select('*')
         .eq('is_deleted', false) // Filter deleted
-        .order('due', { ascending: true });
+        .order('due', { ascending: true })
+        .range(0, 1999);
 
       if (taskError) {
         console.error('Tasks error', taskError);
