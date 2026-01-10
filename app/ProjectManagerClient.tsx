@@ -4431,37 +4431,53 @@ export default function ProjectManagerClient() {
                   // Extract task ID from link like "/tasks/uuid"
                   const taskId = link.replace('/tasks/', '');
 
+                  if (!taskId || taskId === 'undefined') {
+                    toast('Invalid task link');
+                    return;
+                  }
+
                   // Switch to Tasks tab
                   selectTab('tasks');
 
-                  // Find and highlight the task (brief flash effect)
-                  setTimeout(() => {
-                    const taskRow = container.querySelector(`tr[data-id="${taskId}"]`);
+                  // Check and fetch if task missing locally
+                  if (!tasks.find((t) => t.id === taskId)) {
+                    showLoading('Loading task...');
+                    const { data: fetchedTask, error: ftError } = await supabase
+                      .from('tasks')
+                      .select('*')
+                      .eq('id', taskId)
+                      .single();
+                    hideLoading();
+
+                    if (fetchedTask && !ftError) {
+                      tasks.push(fetchedTask);
+                      renderTasks();
+                    }
+                  }
+
+                  // Find and highlight the task
+                  setTimeout(async () => {
+                    let taskRow = container.querySelector(`tr[data-id="${taskId}"]`);
+
+                    if (!taskRow) {
+                      // Task might be filtered out - clear filters and try again
+                      const filterStatusEl = el('filterStatus') as HTMLSelectElement | null;
+                      if (filterStatusEl) filterStatusEl.value = 'All'; // Show all statuses
+                      renderTasks();
+
+                      // Give a small delay for render
+                      await new Promise((r) => setTimeout(r, 100));
+                      taskRow = container.querySelector(`tr[data-id="${taskId}"]`);
+                    }
+
                     if (taskRow) {
                       taskRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
                       taskRow.classList.add('highlight-flash');
                       setTimeout(() => taskRow.classList.remove('highlight-flash'), 2000);
                     } else {
-                      // Task might be filtered out - clear filters and try again
-                      const filterStatusEl = el('filterStatus') as HTMLSelectElement | null;
-                      const filterSearchEl = el('filterSearch') as HTMLInputElement | null;
-
-                      if (filterStatusEl) filterStatusEl.value = 'All'; // Show all statuses so task is visible
-
-                      renderTasks();
-
-                      setTimeout(() => {
-                        const retryRow = container.querySelector(`tr[data-id="${taskId}"]`);
-                        if (retryRow) {
-                          retryRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                          retryRow.classList.add('highlight-flash');
-                          setTimeout(() => retryRow.classList.remove('highlight-flash'), 2000);
-                        } else {
-                          toast('Task not found or may have been deleted');
-                        }
-                      }, 100);
+                      toast('Task not found or may have been deleted');
                     }
-                  }, 100);
+                  }, 50);
                 }
 
                 await loadNotifications();
