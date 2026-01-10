@@ -4475,6 +4475,23 @@ export default function ProjectManagerClient() {
                   // Switch to Tasks tab
                   selectTab('tasks');
 
+                  // Force reset context to ensure visibility
+                  activeProjectName = '';
+                  const fStatus = el('filterStatus') as HTMLSelectElement;
+                  const fAssignee = el('filterAssignee') as HTMLSelectElement;
+                  const fDate = el('filterDatePreset') as HTMLSelectElement;
+                  const fSearch = el('taskSearch') as HTMLInputElement;
+
+                  if (fStatus) fStatus.value = 'All';
+                  if (fAssignee) fAssignee.value = '';
+                  if (fDate) fDate.value = 'all';
+                  if (fSearch) fSearch.value = '';
+
+                  // Clear any highlights
+                  document.querySelectorAll('.highlight-flash').forEach(el => el.classList.remove('highlight-flash'));
+
+                  renderTasks();
+
                   // Check and fetch if task missing locally
                   if (!tasks.find((t) => t.id === taskId)) {
                     showLoading('Loading task...');
