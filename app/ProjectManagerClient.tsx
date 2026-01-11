@@ -8991,7 +8991,12 @@ export default function ProjectManagerClient() {
       // Update report title
       const reportTitle = container.querySelector('.report-header h1');
       if (reportTitle) {
-        reportTitle.textContent = 'Kanban Board Report';
+        let title = 'Kanban Board Report';
+        // Add employee name if filtering by single person
+        if (options.employeeFilter && options.employeeFilter.length > 0) {
+          title += ` - ${options.employeeFilter}`;
+        }
+        reportTitle.textContent = title;
       }
 
       // Populate report header
@@ -9018,8 +9023,15 @@ export default function ProjectManagerClient() {
           filtersList.appendChild(li);
         }
 
+        // Remove any existing legend first to prevent duplicates
+        const existingLegend = filtersList.parentElement?.querySelector('.report-legend');
+        if (existingLegend) {
+          existingLegend.remove();
+        }
+
         // Add legend after filters
         const legendDiv = document.createElement('div');
+        legendDiv.className = 'report-legend'; // Add class for easy identification
         legendDiv.style.cssText = 'margin-top:16px;padding:12px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;';
         legendDiv.innerHTML = `
           <p style="margin:0 0 8px 0;font-weight:700;font-size:9pt;color:#111827;">Legend:</p>
