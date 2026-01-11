@@ -57,6 +57,12 @@ const staticHtml = `
               </svg>
               Login
             </button>
+            <button id="btnClearCache" class="btn" title="Clear cache and reload" style="display:none; background:#dc2626; color:white; font-size:11px; padding:4px 8px;">
+              <svg xmlns="http://www.w3.org/2000/svg" height="16px" viewBox="0 -960 960 960" width="16px" fill="currentColor">
+                <path d="M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520ZM360-280h80v-360h-80v360Zm160 0h80v-360h-80v360ZM280-720v520-520Z"/>
+              </svg>
+              Clear Cache
+            </button>
             <button id="btnLogout" class="btn btn-danger" style="display:none">Logout</button>
           </div>
           <div id="who" class="who"></div>
@@ -1284,11 +1290,32 @@ export default function ProjectManagerClient() {
       try {
         const raw = localStorage.getItem(SESSION_KEY);
         if (!raw) return null;
+
         const payload = JSON.parse(raw);
-        if (!payload || !payload.user || !payload.lastActive) return null;
+
+        // Validate payload structure
+        if (!payload || typeof payload !== 'object') {
+          console.warn('Invalid session payload structure, clearing');
+          clearSession();
+          return null;
+        }
+
+        if (!payload.user || !payload.lastActive) {
+          console.warn('Incomplete session data, clearing');
+          clearSession();
+          return null;
+        }
+
+        // Validate user object
+        if (!payload.user.staff_id || !payload.user.name) {
+          console.warn('Invalid user data in session, clearing');
+          clearSession();
+          return null;
+        }
 
         const now = Date.now();
         if (now - payload.lastActive > SESSION_TIMEOUT_MS) {
+          console.log('Session expired, clearing');
           clearSession();
           return null;
         }
@@ -1297,7 +1324,8 @@ export default function ProjectManagerClient() {
         saveSession(payload.user);
         return payload.user;
       } catch (e) {
-        console.error('Restore session failed', e);
+        console.error('Restore session failed, clearing corrupted data:', e);
+        clearSession();
         return null;
       }
     }
@@ -4651,6 +4679,25 @@ export default function ProjectManagerClient() {
     const who = el('who');
 
     btnLogin && btnLogin.addEventListener('click', () => showModal(loginModal));
+
+    // Clear Cache button handler
+    const btnClearCache = el('btnClearCache');
+    if (btnClearCache) {
+      btnClearCache.addEventListener('click', () => {
+        if (confirm('This will clear all cached data and reload the page. Continue?')) {
+          try {
+            localStorage.clear();
+            sessionStorage.clear();
+            console.log('Cache cleared successfully');
+            window.location.reload();
+          } catch (e) {
+            console.error('Failed to clear cache:', e);
+            alert('Failed to clear cache. Please try clearing your browser data manually.');
+          }
+        }
+      });
+    }
+
     loginCancel &&
       loginCancel.addEventListener('click', () => hideModal(loginModal));
 
@@ -4743,47 +4790,73 @@ export default function ProjectManagerClient() {
 
     // ---------- LOAD DATA AFTER LOGIN ----------
     async function loadDataAfterLogin() {
-      showLoading('Loading projects and tasks…');
+      try {
+        showLoading('Loading projects and tasks…');
 
-      const { data: projData, error: projError } = await supabase
-        .from('projects')
-        .select('*')
-        .eq('is_deleted', false) // Filter deleted
-        .order('created_at', { ascending: false });
+        const { data: projData, error: projError } = await supabase
+          .from('projects')
+          .select('*')
+          .eq('is_deleted', false) // Filter deleted
+          .order('created_at', { ascending: false });
 
-      if (projError) {
-        console.error('Projects error', projError);
-        toast('Failed to load projects');
-      } else {
-        projects = projData || [];
+        if (projError) {
+          console.error('Projects error', projError);
+          toast('Failed to load projects');
+          hideLoading();
+          return;
+        } else {
+          projects = projData || [];
+        }
+
+        const { data: taskData, error: taskError } = await supabase
+          .from('tasks')
+          .select('*')
+          .eq('is_deleted', false) // Filter deleted
+          .order('due', { ascending: true })
+          .range(0, 1999);
+
+        if (taskError) {
+          console.error('Tasks error', taskError);
+          toast('Failed to load tasks');
+          hideLoading();
+          return;
+        } else {
+          tasks = taskData || [];
+        }
+
+        buildProjectSidebar();
+        refreshAssigneeFilters();
+        renderTasks();
+        renderKanban();
+        if (viewStages && viewStages.style.display !== 'none') {
+          renderProjectStructure();
+        }
+        updateProjectStatusControl();
+        refreshRoleUI();
+        refreshReviewTabStatus();
+
+        hideLoading();
+      } catch (error) {
+        console.error('Critical error in loadDataAfterLogin:', error);
+        hideLoading();
+        toast('Failed to load data. Try clearing cache if this persists.');
+
+        // Clear potentially corrupted session
+        currentUser = null;
+        clearSession();
+
+        // Reset UI
+        if (who) who.textContent = '';
+        if (btnLogin) btnLogin.style.display = '';
+        if (btnLogout) btnLogout.style.display = 'none';
+
+        // Show Clear Cache button to help user recover
+        const btnClearCache = el('btnClearCache');
+        if (btnClearCache) btnClearCache.style.display = '';
+
+        const notificationBell = el('notificationBell');
+        if (notificationBell) notificationBell.style.display = 'none';
       }
-
-      const { data: taskData, error: taskError } = await supabase
-        .from('tasks')
-        .select('*')
-        .eq('is_deleted', false) // Filter deleted
-        .order('due', { ascending: true })
-        .range(0, 1999);
-
-      if (taskError) {
-        console.error('Tasks error', taskError);
-        toast('Failed to load tasks');
-      } else {
-        tasks = taskData || [];
-      }
-
-      buildProjectSidebar();
-      refreshAssigneeFilters();
-      renderTasks();
-      renderKanban();
-      if (viewStages && viewStages.style.display !== 'none') {
-        renderProjectStructure();
-      }
-      updateProjectStatusControl();
-      refreshRoleUI();
-      refreshReviewTabStatus();
-
-      hideLoading();
     }
 
     // ---------- PROJECT TYPES (TEMPLATES) ----------
