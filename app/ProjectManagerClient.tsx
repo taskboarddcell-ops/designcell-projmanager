@@ -4164,6 +4164,15 @@ export default function ProjectManagerClient() {
                   <strong>Revision:</strong> ${esc(t.review_comments || '')}
                  </div>`
             : ''}
+            
+            ${t.revision_count && t.revision_count > 0
+            ? `<div style="margin-top:6px;padding:4px 8px;background:${t.status === 'Needs Revision' ? '#f3e8ff' : '#fef3c7'};border:1px solid ${t.status === 'Needs Revision' ? '#c084fc' : '#fbbf24'};border-radius:4px;display:inline-block;font-size:11px;font-weight:600;color:${t.status === 'Needs Revision' ? '#7c3aed' : '#d97706'};">
+                  <svg xmlns="http://www.w3.org/2000/svg" height="12" width="12" viewBox="0 -960 960 960" fill="currentColor" style="vertical-align:middle;margin-right:4px;">
+                    <path d="M440-280h80v-240h-80v240Zm40-320q17 0 28.5-11.5T520-640q0-17-11.5-28.5T480-680q-17 0-28.5 11.5T440-640q0 17 11.5 28.5T480-600Zm0 520q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Z"/>
+                  </svg>
+                  ${t.status === 'Needs Revision' ? `Revision #${t.revision_count}` : `${t.revision_count} revision${t.revision_count > 1 ? 's' : ''}`}
+                </div>`
+            : ''}
           </div>
         </div>
       `;
@@ -6727,6 +6736,7 @@ export default function ProjectManagerClient() {
           review_comments: comments,
           reviewed_by: currentUser.staff_id,
           reviewed_at: new Date().toISOString(),
+          revision_count: (selectedTask.revision_count || 0) + 1,
         })
         .eq('id', selectedTask.id);
 
@@ -6902,7 +6912,8 @@ export default function ProjectManagerClient() {
           status: 'Needs Revision',
           review_comments: feedback,
           reviewed_at: new Date().toISOString(),
-          reviewed_by: currentUser.staff_id
+          reviewed_by: currentUser.staff_id,
+          revision_count: (selectedTask.revision_count || 0) + 1,
         }).eq('id', selectedTask.id);
 
         if (error) throw error;
@@ -9118,6 +9129,14 @@ export default function ProjectManagerClient() {
                             <path d="M382-240 154-468l57-57 171 171 367-367 57 57-424 424Z"/>
                           </svg>
                           ${esc(formatDate(task.completed_at))}
+                        </div>
+                      ` : ''}
+                      ${task.revision_count && task.revision_count > 0 ? `
+                        <div style="margin-top:3px;padding:2px 4px;background:${status === 'Review' ? '#f3e8ff' : '#fef3c7'};border:1px solid ${status === 'Review' ? '#c084fc' : '#fbbf24'};border-radius:3px;display:inline-block;font-weight:600;color:${status === 'Review' ? '#7c3aed' : '#d97706'}; print-color-adjust: exact;-webkit-print-color-adjust: exact;">
+                          <svg xmlns="http://www.w3.org/2000/svg" height="8" width="8" viewBox="0 -960 960 960" fill="currentColor" style="vertical-align:middle;margin-right:2px;">
+                            <path d="M440-280h80v-240h-80v240Zm40-320q17 0 28.5-11.5T520-640q0-17-11.5-28.5T480-680q-17 0-28.5 11.5T440-640q0 17 11.5 28.5T480-600Zm0 520q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Z"/>
+                          </svg>
+                          ${status === 'Review' ? `Rev #${task.revision_count}` : `${task.revision_count} revision${task.revision_count > 1 ? 's' : ''}`}
                         </div>
                       ` : ''}
                     </div>
