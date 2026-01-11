@@ -70,6 +70,7 @@ const staticHtml = `
       </div>
 
       <div class="sb-new">
+        <button id="btnNewTask" class="btn">+ Task</button>
         <button id="btnNewProject" class="btn">+ Project</button>
         <button id="btnAddUser" class="btn">+ User</button>
       </div>
@@ -5690,7 +5691,31 @@ export default function ProjectManagerClient() {
       showModal(taskModal);
     }
 
+    btnNewTask &&
+      btnNewTask.addEventListener('click', () => {
+        if (!currentUser) {
+          toast('Please login first');
+          return;
+        }
 
+        // Admins -> always
+        if (isAdmin()) {
+          openTaskModal(null);
+          return;
+        }
+
+        // Non-admins -> must be lead on at least one project
+        const leadProjects = projects.filter((p) =>
+          (p.lead_ids || []).includes(currentUser.staff_id),
+        );
+
+        if (leadProjects.length === 0) {
+          toast('Only Admins or Project Leads can create tasks');
+          return;
+        }
+
+        openTaskModal(null);
+      });
 
     taskCancel &&
       taskCancel.addEventListener('click', () => {
