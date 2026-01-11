@@ -5659,12 +5659,10 @@ export default function ProjectManagerClient() {
       if (editingTask) {
         const project = projects.find((p) => p.id === editingTask.project_id);
 
-        const canEditTask =
-          isAdmin() ||
-          isProjectLeadFor(project.id);
+        const canEditTask = isAdmin();
 
         if (!canEditTask) {
-          toast('Only Admins or Project Leads can edit tasks');
+          toast('Only Admins can edit tasks');
           editingTask = null;
           return;
         }
@@ -5817,22 +5815,10 @@ export default function ProjectManagerClient() {
           showLoading(editingTask ? 'Updating task…' : 'Creating task…');
 
           if (editingTask) {
-            let canEdit = false;
-            if (currentUser) {
-              if (isAdmin()) {
-                canEdit = true;
-              } else {
-                const projForTask = projects.find(
-                  (p) => p.id === editingTask.project_id,
-                );
-                if (projForTask && isProjectLeadFor(projForTask.id)) {
-                  canEdit = true;
-                }
-              }
-            }
+            const canEdit = isAdmin();
 
             if (!canEdit) {
-              toast('Only Admins or Project Leads can edit tasks');
+              toast('Only Admins can edit tasks');
               return;
             }
 
