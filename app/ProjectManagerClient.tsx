@@ -7311,7 +7311,7 @@ export default function ProjectManagerClient() {
 
       projectInfoCard.style.display = '';
       projectInfoCard.innerHTML = `
-        <div class="card" style="background:#f8fafc;border:2px solid var(--line-strong);">
+        <div class="card" style="background:#ffffff;border:2px solid var(--line-strong);">
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;">
             
             <!-- Project Name & Type -->
@@ -8257,7 +8257,11 @@ export default function ProjectManagerClient() {
         const showRemarks = (el('pwShowRemarks') as HTMLInputElement)?.checked || false;
 
         // Get employee filter
-        const selectedEmployee = (el('pwEmployeeFilter') as HTMLSelectElement)?.value || '';
+        const pwEmployeeFilterEl = el('pwEmployeeFilter') as HTMLSelectElement;
+        const selectedEmployee = pwEmployeeFilterEl?.value || '';
+        const selectedEmployeeName = selectedEmployee
+          ? (pwEmployeeFilterEl?.selectedOptions[0]?.textContent || selectedEmployee)
+          : '';
 
         // Filter tasks based on filter mode
         const filteredTasks = tasks.filter((t) => {
@@ -8427,7 +8431,7 @@ export default function ProjectManagerClient() {
               showStats,
               showDesc,
               showRemarks,
-              employeeFilter: selectedEmployee
+              employeeFilter: selectedEmployeeName
             });
           } else if (reportType === 'projectstructure') {
             // Get selected projects
@@ -8443,7 +8447,7 @@ export default function ProjectManagerClient() {
               showDesc,
               showRemarks,
               selectedProjects,
-              employeeFilter: selectedEmployee
+              employeeFilter: selectedEmployeeName
             });
           } else {
             // Simple task list
@@ -8455,7 +8459,7 @@ export default function ProjectManagerClient() {
               showStats,
               showDesc,
               showRemarks,
-              employeeFilter: selectedEmployee
+              employeeFilter: selectedEmployeeName
             });
           }
 
