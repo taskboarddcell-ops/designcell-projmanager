@@ -8426,7 +8426,8 @@ export default function ProjectManagerClient() {
               statuses: selectedStatuses,
               showStats,
               showDesc,
-              showRemarks
+              showRemarks,
+              employeeFilter: selectedEmployee
             });
           } else if (reportType === 'projectstructure') {
             // Get selected projects
@@ -8441,7 +8442,8 @@ export default function ProjectManagerClient() {
               showStats,
               showDesc,
               showRemarks,
-              selectedProjects
+              selectedProjects,
+              employeeFilter: selectedEmployee
             });
           } else {
             // Simple task list
@@ -8452,7 +8454,8 @@ export default function ProjectManagerClient() {
               statuses: selectedStatuses,
               showStats,
               showDesc,
-              showRemarks
+              showRemarks,
+              employeeFilter: selectedEmployee
             });
           }
 
@@ -8495,6 +8498,16 @@ export default function ProjectManagerClient() {
         reportDate.textContent = new Date().toLocaleString();
       }
 
+      // Update report title
+      const reportTitle = container.querySelector('.report-header h1');
+      if (reportTitle) {
+        let title = 'Task Report';
+        if (options.employeeFilter) {
+          title += ` - ${options.employeeFilter}`;
+        }
+        reportTitle.textContent = title;
+      }
+
       // Show applied filters
       const filtersList = el('reportFilters');
       if (filtersList) {
@@ -8505,6 +8518,11 @@ export default function ProjectManagerClient() {
           const filterModeLabel = options.filterMode === 'assigned' ? 'Assignment Date' :
             options.filterMode === 'completed' ? 'Completion Date' : 'Due Date';
           li.textContent = `${filterModeLabel}: ${options.dateFrom || 'Start'} to ${options.dateTo || 'End'}`;
+          filtersList.appendChild(li);
+        }
+        if (options.employeeFilter) {
+          const li = document.createElement('li');
+          li.textContent = `Staff: ${options.employeeFilter}`;
           filtersList.appendChild(li);
         }
         if (filtersList.children.length === 0) {
@@ -8701,7 +8719,11 @@ export default function ProjectManagerClient() {
       // Update report title
       const reportTitle = container.querySelector('.report-header h1');
       if (reportTitle) {
-        reportTitle.textContent = options.isFullChecklist ? 'Project Checklist' : 'Project Structure Report';
+        let title = options.isFullChecklist ? 'Project Checklist' : 'Project Structure Report';
+        if (options.employeeFilter) {
+          title += ` - ${options.employeeFilter}`;
+        }
+        reportTitle.textContent = title;
       }
 
       // Show applied filters
@@ -8725,11 +8747,56 @@ export default function ProjectManagerClient() {
           li.textContent = `${filterModeLabel}: ${options.dateFrom || 'Start'} to ${options.dateTo || 'End'}`;
           filtersList.appendChild(li);
         }
+        if (options.employeeFilter) {
+          const li = document.createElement('li');
+          li.textContent = `Staff: ${options.employeeFilter}`;
+          filtersList.appendChild(li);
+        }
         if (filtersList.children.length === 0) {
           const li = document.createElement('li');
           li.textContent = 'No filters applied';
           filtersList.appendChild(li);
         }
+
+        // Remove any existing legend first to prevent duplicates
+        const existingLegend = filtersList.parentElement?.querySelector('.report-legend');
+        if (existingLegend) {
+          existingLegend.remove();
+        }
+
+        // Add legend after filters
+        const legendDiv = document.createElement('div');
+        legendDiv.className = 'report-legend'; // Add class for easy identification
+        legendDiv.style.cssText = 'margin-top:12px;padding:10px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:4px;';
+        legendDiv.innerHTML = `
+          <div style="display:flex;align-items:center;flex-wrap:wrap;gap:12px;font-size:7.5pt;">
+            <strong style="font-size:8pt;color:#111827;margin-right:4px;">Legend:</strong>
+            <div style="display:flex;align-items:center;gap:4px;">
+              <span style="display:inline-block;width:10px;height:10px;background:#dc2626;border-radius:2px;print-color-adjust:exact;-webkit-print-color-adjust:exact;"></span>
+              <span>High</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:4px;">
+              <span style="display:inline-block;width:10px;height:10px;background:#f59e0b;border-radius:2px;print-color-adjust:exact;-webkit-print-color-adjust:exact;"></span>
+              <span>Medium</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:4px;">
+              <span style="display:inline-block;width:10px;height:10px;background:#6b7280;border-radius:2px;print-color-adjust:exact;-webkit-print-color-adjust:exact;"></span>
+              <span>Low</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:4px;">
+              <span style="color:#dc2626;font-weight:700;font-size:7pt;">OVERDUE</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:4px;">
+              <span style="display:inline-block;padding:1px 5px;background:#f3e8ff;border:1px solid #c084fc;border-radius:3px;color:#7c3aed;font-weight:600;font-size:6.5pt;print-color-adjust:exact;-webkit-print-color-adjust:exact;">Rev #X</span>
+              <span>Current</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:4px;">
+              <span style="display:inline-block;padding:1px 5px;background:#fef3c7;border:1px solid #fbbf24;border-radius:3px;color:#d97706;font-weight:600;font-size:6.5pt;print-color-adjust:exact;-webkit-print-color-adjust:exact;">X revs</span>
+              <span>Total</span>
+            </div>
+          </div>
+        `;
+        filtersList.parentElement?.appendChild(legendDiv);
       }
 
       // Filter projects by selection
@@ -9051,6 +9118,11 @@ export default function ProjectManagerClient() {
           const filterModeLabel = options.filterMode === 'assigned' ? 'Assignment Date' :
             options.filterMode === 'completed' ? 'Completion Date' : 'Due Date';
           li.textContent = `${filterModeLabel}: ${options.dateFrom || 'Start'} to ${options.dateTo || 'End'}`;
+          filtersList.appendChild(li);
+        }
+        if (options.employeeFilter) {
+          const li = document.createElement('li');
+          li.textContent = `Staff: ${options.employeeFilter}`;
           filtersList.appendChild(li);
         }
         if (filtersList.children.length === 0) {
