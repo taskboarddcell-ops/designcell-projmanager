@@ -8522,33 +8522,32 @@ export default function ProjectManagerClient() {
         // Add legend after filters
         const legendDiv = document.createElement('div');
         legendDiv.className = 'report-legend'; // Add class for easy identification
-        legendDiv.style.cssText = 'margin-top:16px;padding:12px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;';
+        legendDiv.style.cssText = 'margin-top:12px;padding:10px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:4px;';
         legendDiv.innerHTML = `
-          <p style="margin:0 0 8px 0;font-weight:700;font-size:9pt;color:#111827;">Legend:</p>
-          <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;font-size:7.5pt;">
-            <div style="display:flex;align-items:center;gap:6px;">
-              <span style="display:inline-block;width:12px;height:12px;background:#dc2626;border-radius:2px;"></span>
-              <span>High Priority</span>
+          <div style="display:flex;align-items:center;flex-wrap:wrap;gap:12px;font-size:7.5pt;">
+            <strong style="font-size:8pt;color:#111827;margin-right:4px;">Legend:</strong>
+            <div style="display:flex;align-items:center;gap:4px;">
+              <span style="display:inline-block;width:10px;height:10px;background:#dc2626;border-radius:2px;print-color-adjust:exact;-webkit-print-color-adjust:exact;"></span>
+              <span>High</span>
             </div>
-            <div style="display:flex;align-items:center;gap:6px;">
-              <span style="display:inline-block;width:12px;height:12px;background:#f59e0b;border-radius:2px;"></span>
-              <span>Medium Priority</span>
+            <div style="display:flex;align-items:center;gap:4px;">
+              <span style="display:inline-block;width:10px;height:10px;background:#f59e0b;border-radius:2px;print-color-adjust:exact;-webkit-print-color-adjust:exact;"></span>
+              <span>Medium</span>
             </div>
-            <div style="display:flex;align-items:center;gap:6px;">
-              <span style="display:inline-block;width:12px;height:12px;background:#6b7280;border-radius:2px;"></span>
-              <span>Low Priority</span>
+            <div style="display:flex;align-items:center;gap:4px;">
+              <span style="display:inline-block;width:10px;height:10px;background:#6b7280;border-radius:2px;print-color-adjust:exact;-webkit-print-color-adjust:exact;"></span>
+              <span>Low</span>
             </div>
-            <div style="display:flex;align-items:center;gap:6px;">
-              <span style="color:#dc2626;font-weight:700;">OVERDUE</span>
-              <span>Past due date</span>
+            <div style="display:flex;align-items:center;gap:4px;">
+              <span style="color:#dc2626;font-weight:700;font-size:7pt;">OVERDUE</span>
             </div>
-            <div style="display:flex;align-items:center;gap:6px;">
-              <span style="display:inline-block;padding:2px 6px;background:#f3e8ff;border:1px solid #c084fc;border-radius:3px;color:#7c3aed;font-weight:600;font-size:6.5pt;">Rev #X</span>
-              <span>Current revision</span>
+            <div style="display:flex;align-items:center;gap:4px;">
+              <span style="display:inline-block;padding:1px 5px;background:#f3e8ff;border:1px solid #c084fc;border-radius:3px;color:#7c3aed;font-weight:600;font-size:6.5pt;print-color-adjust:exact;-webkit-print-color-adjust:exact;">Rev #X</span>
+              <span>Current</span>
             </div>
-            <div style="display:flex;align-items:center;gap:6px;">
-              <span style="display:inline-block;padding:2px 6px;background:#fef3c7;border:1px solid #fbbf24;border-radius:3px;color:#d97706;font-weight:600;font-size:6.5pt;">X revisions</span>
-              <span>Total revisions</span>
+            <div style="display:flex;align-items:center;gap:4px;">
+              <span style="display:inline-block;padding:1px 5px;background:#fef3c7;border:1px solid #fbbf24;border-radius:3px;color:#d97706;font-weight:600;font-size:6.5pt;print-color-adjust:exact;-webkit-print-color-adjust:exact;">X revs</span>
+              <span>Total</span>
             </div>
           </div>
         `;
@@ -9069,33 +9068,32 @@ export default function ProjectManagerClient() {
         // Add legend after filters
         const legendDiv = document.createElement('div');
         legendDiv.className = 'report-legend'; // Add class for easy identification
-        legendDiv.style.cssText = 'margin-top:16px;padding:12px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;';
+        legendDiv.style.cssText = 'margin-top:12px;padding:10px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:4px;';
         legendDiv.innerHTML = `
-          <p style="margin:0 0 8px 0;font-weight:700;font-size:9pt;color:#111827;">Legend:</p>
-          <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;font-size:7.5pt;">
-            <div style="display:flex;align-items:center;gap:6px;">
-              <span style="display:inline-block;width:12px;height:12px;background:#dc2626;border-radius:2px;"></span>
-              <span>High Priority</span>
+          <div style="display:flex;align-items:center;flex-wrap:wrap;gap:12px;font-size:7.5pt;">
+            <strong style="font-size:8pt;color:#111827;margin-right:4px;">Legend:</strong>
+            <div style="display:flex;align-items:center;gap:4px;">
+              <span style="display:inline-block;width:10px;height:10px;background:#dc2626;border-radius:2px;print-color-adjust:exact;-webkit-print-color-adjust:exact;"></span>
+              <span>High</span>
             </div>
-            <div style="display:flex;align-items:center;gap:6px;">
-              <span style="display:inline-block;width:12px;height:12px;background:#f59e0b;border-radius:2px;"></span>
-              <span>Medium Priority</span>
+            <div style="display:flex;align-items:center;gap:4px;">
+              <span style="display:inline-block;width:10px;height:10px;background:#f59e0b;border-radius:2px;print-color-adjust:exact;-webkit-print-color-adjust:exact;"></span>
+              <span>Medium</span>
             </div>
-            <div style="display:flex;align-items:center;gap:6px;">
-              <span style="display:inline-block;width:12px;height:12px;background:#6b7280;border-radius:2px;"></span>
-              <span>Low Priority</span>
+            <div style="display:flex;align-items:center;gap:4px;">
+              <span style="display:inline-block;width:10px;height:10px;background:#6b7280;border-radius:2px;print-color-adjust:exact;-webkit-print-color-adjust:exact;"></span>
+              <span>Low</span>
             </div>
-            <div style="display:flex;align-items:center;gap:6px;">
-              <span style="color:#dc2626;font-weight:700;">OVERDUE</span>
-              <span>Past due date</span>
+            <div style="display:flex;align-items:center;gap:4px;">
+              <span style="color:#dc2626;font-weight:700;font-size:7pt;">OVERDUE</span>
             </div>
-            <div style="display:flex;align-items:center;gap:6px;">
-              <span style="display:inline-block;padding:2px 6px;background:#f3e8ff;border:1px solid #c084fc;border-radius:3px;color:#7c3aed;font-weight:600;font-size:6.5pt;">Rev #X</span>
-              <span>Current revision</span>
+            <div style="display:flex;align-items:center;gap:4px;">
+              <span style="display:inline-block;padding:1px 5px;background:#f3e8ff;border:1px solid #c084fc;border-radius:3px;color:#7c3aed;font-weight:600;font-size:6.5pt;print-color-adjust:exact;-webkit-print-color-adjust:exact;">Rev #X</span>
+              <span>Current</span>
             </div>
-            <div style="display:flex;align-items:center;gap:6px;">
-              <span style="display:inline-block;padding:2px 6px;background:#fef3c7;border:1px solid #fbbf24;border-radius:3px;color:#d97706;font-weight:600;font-size:6.5pt;">X revisions</span>
-              <span>Total revisions</span>
+            <div style="display:flex;align-items:center;gap:4px;">
+              <span style="display:inline-block;padding:1px 5px;background:#fef3c7;border:1px solid #fbbf24;border-radius:3px;color:#d97706;font-weight:600;font-size:6.5pt;print-color-adjust:exact;-webkit-print-color-adjust:exact;">X revs</span>
+              <span>Total</span>
             </div>
           </div>
         `;
