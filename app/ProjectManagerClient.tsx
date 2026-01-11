@@ -8077,11 +8077,11 @@ export default function ProjectManagerClient() {
           setStatus('Rejected', false);
           setStatus('Complete', true);
         } else if (mode === 'kanban') {
-          pwFilterModeDesc.textContent = 'Shows ALL current Pending and In Progress tasks (no date filter), plus all Completed tasks during the selected date range.';
-          // Active tasks + completed in range
+          pwFilterModeDesc.textContent = 'Shows ALL current Pending and In Progress tasks (no date filter), plus Review tasks revised during the period, plus Completed tasks during the selected date range.';
+          // Active tasks + review tasks revised in range + completed in range
           setStatus('Pending', true);
           setStatus('In Progress', true);
-          setStatus('Needs Revision', false);
+          setStatus('Needs Revision', true);
           setStatus('Rejected', false);
           setStatus('Complete', true);
         } else if (mode === 'all') {
@@ -8295,10 +8295,22 @@ export default function ProjectManagerClient() {
             return true; // No date filter, include all completed
           }
           else if (filterMode === 'kanban') {
-            // Kanban Board View: ALL Pending/In Progress tasks + Completed tasks in date range
+            // Kanban Board View: ALL Pending/In Progress tasks + Completed tasks in date range + Review tasks revised in date range
             if (status === 'Pending' || status === 'In Progress') {
               // Include all active tasks regardless of date
               return true;
+            } else if (status === 'Needs Revision') {
+              // For Review tasks, apply date filter based on reviewed_at
+              if (dateFrom || dateTo) {
+                if (t.reviewed_at) {
+                  const reviewedDate = new Date(t.reviewed_at);
+                  if (dateFrom && reviewedDate < new Date(dateFrom)) return false;
+                  if (dateTo && reviewedDate > new Date(dateTo + 'T23:59:59')) return false;
+                  return true;
+                }
+                return false; // No reviewed_at? Exclude
+              }
+              return true; // No date filter, include all Review tasks
             } else if (isComplete) {
               // For completed tasks, apply date filter
               if (dateFrom || dateTo) {
@@ -8312,7 +8324,7 @@ export default function ProjectManagerClient() {
               }
               return true; // No date filter, include all completed
             }
-            // Other statuses (Needs Revision, Rejected) - exclude unless in status filter
+            // Other statuses (Rejected) - exclude
             return false;
           }
           else if (filterMode === 'all') {
@@ -8994,12 +9006,11 @@ export default function ProjectManagerClient() {
       const thead = container.querySelector('.report-table thead tr');
 
       // Create kanban-style layout (define outside if block for stats)
-      const statuses = ['Pending', 'In Progress', 'Needs Revision', 'Rejected', 'Complete'];
+      const statuses = ['Pending', 'In Progress', 'Review', 'Complete'];
       const statusColors = {
         'Pending': '#f59e0b',
         'In Progress': '#3b82f6',
-        'Needs Revision': '#8b5cf6',
-        'Rejected': '#ef4444',
+        'Review': '#8b5cf6',
         'Complete': '#10b981'
       };
 
@@ -9033,7 +9044,14 @@ export default function ProjectManagerClient() {
         kanbanRow.style.breakInside = 'auto';
 
         statuses.forEach(status => {
-          const statusTasks = tasksToPrint.filter(t => (t.status || 'Pending') === status);
+          // Map 'Needs Revision' to 'Review' for display
+          const statusTasks = tasksToPrint.filter(t => {
+            const taskStatus = t.status || 'Pending';
+            if (status === 'Review') {
+              return taskStatus === 'Needs Revision';
+            }
+            return taskStatus === status;
+          });
           const cell = document.createElement('td');
           cell.style.cssText = 'border:1px solid #ddd;padding:6px;vertical-align:top;background:#fafafa;';
 
