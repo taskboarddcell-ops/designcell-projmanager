@@ -418,7 +418,7 @@ const staticHtml = `
               Print Checklist
             </button>
           </div>
-          <div id="projectInfoCard" style="display:none;margin-bottom:8px;position:sticky;top:0;background:var(--bg-main);z-index:5;padding-top:12px;padding-bottom:4px;"></div>
+          <div id="projectInfoCard" style="display:none;margin-bottom:8px;position:sticky;top:0;background:#ffffff;z-index:5;padding-top:12px;padding-bottom:4px;"></div>
           <div id="stagesBox"></div>
         </section>
 
