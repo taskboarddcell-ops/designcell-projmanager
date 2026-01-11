@@ -8499,11 +8499,7 @@ export default function ProjectManagerClient() {
       const filtersList = el('reportFilters');
       if (filtersList) {
         filtersList.innerHTML = '';
-        if (options.statuses && options.statuses.length > 0) {
-          const li = document.createElement('li');
-          li.textContent = `Statuses: ${options.statuses.join(', ')}`;
-          filtersList.appendChild(li);
-        }
+        // Don't show statuses - they're obvious from the status column
         if (options.dateFrom || options.dateTo) {
           const li = document.createElement('li');
           const filterModeLabel = options.filterMode === 'assigned' ? 'Assignment Date' :
@@ -8516,6 +8512,47 @@ export default function ProjectManagerClient() {
           li.textContent = 'No filters applied';
           filtersList.appendChild(li);
         }
+
+        // Remove any existing legend first to prevent duplicates
+        const existingLegend = filtersList.parentElement?.querySelector('.report-legend');
+        if (existingLegend) {
+          existingLegend.remove();
+        }
+
+        // Add legend after filters
+        const legendDiv = document.createElement('div');
+        legendDiv.className = 'report-legend'; // Add class for easy identification
+        legendDiv.style.cssText = 'margin-top:16px;padding:12px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;';
+        legendDiv.innerHTML = `
+          <p style="margin:0 0 8px 0;font-weight:700;font-size:9pt;color:#111827;">Legend:</p>
+          <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;font-size:7.5pt;">
+            <div style="display:flex;align-items:center;gap:6px;">
+              <span style="display:inline-block;width:12px;height:12px;background:#dc2626;border-radius:2px;"></span>
+              <span>High Priority</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <span style="display:inline-block;width:12px;height:12px;background:#f59e0b;border-radius:2px;"></span>
+              <span>Medium Priority</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <span style="display:inline-block;width:12px;height:12px;background:#6b7280;border-radius:2px;"></span>
+              <span>Low Priority</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <span style="color:#dc2626;font-weight:700;">OVERDUE</span>
+              <span>Past due date</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <span style="display:inline-block;padding:2px 6px;background:#f3e8ff;border:1px solid #c084fc;border-radius:3px;color:#7c3aed;font-weight:600;font-size:6.5pt;">Rev #X</span>
+              <span>Current revision</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <span style="display:inline-block;padding:2px 6px;background:#fef3c7;border:1px solid #fbbf24;border-radius:3px;color:#d97706;font-weight:600;font-size:6.5pt;">X revisions</span>
+              <span>Total revisions</span>
+            </div>
+          </div>
+        `;
+        filtersList.parentElement?.appendChild(legendDiv);
       }
 
       // Generate table rows
