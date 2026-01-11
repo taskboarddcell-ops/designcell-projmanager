@@ -407,7 +407,7 @@ const staticHtml = `
 
         <!-- Project Structure -->
         <section id="viewStages" class="card" style="display:none">
-          <div class="row" id="layoutActions" style="margin-bottom:12px;display:none;justify-content:space-between;align-items:center;">
+          <div class="row" id="layoutActions" style="margin-bottom:12px;display:none;justify-content:space-between;align-items:center;position:sticky;top:0;background:#ffffff;z-index:6;padding-top:12px;padding-bottom:8px;">
             <div style="display:flex;gap:8px;">
               <button id="btnEditLayout" class="btn">✎ Edit Layout</button>
             </div>
@@ -418,7 +418,7 @@ const staticHtml = `
               Print Checklist
             </button>
           </div>
-          <div id="projectInfoCard" style="display:none;margin-bottom:8px;position:sticky;top:0;background:#ffffff;z-index:5;padding-top:12px;padding-bottom:4px;"></div>
+          <div id="projectInfoCard" style="display:none;margin-bottom:8px;position:sticky;top:60px;background:#ffffff;z-index:5;padding-top:12px;padding-bottom:4px;"></div>
           <div id="stagesBox"></div>
         </section>
 
