@@ -1737,58 +1737,69 @@ export default function ProjectManagerClient() {
         }
 
         // Advanced Date Filtering
+        // For Kanban board: Skip date filters for Pending and In Progress tasks
+        // Only apply date filters to Complete tasks
+        const taskStatus = t.status || 'Pending';
+        const isActivePendingOrProgress = (taskStatus === 'Pending' || taskStatus === 'In Progress');
+
         if (datePreset !== 'all') {
-          if (datePreset === 'overdue') {
-            // Overdue is special: only applies if not complete and due date < today
-            if (t.status === 'Complete') return false;
-            const dueDate = t.due ? new Date(t.due) : null;
-            if (!dueDate) return false;
-            // Set dueDate to start of day for accurate comparison
-            const dueComp = new Date(dueDate);
-            dueComp.setHours(0, 0, 0, 0);
-            if (dueComp >= now) return false;
-          } else if (datePreset === 'custom') {
-            const taskDateRaw = t[dateField];
-            const taskDate = taskDateRaw ? new Date(taskDateRaw) : null;
-            if (!taskDate) return false;
-
-            if (dateFromEl?.value) {
-              const from = new Date(dateFromEl.value);
-              from.setHours(0, 0, 0, 0);
-              if (taskDate < from) return false;
-            }
-            if (dateToEl?.value) {
-              const to = new Date(dateToEl.value);
-              to.setHours(23, 59, 59, 999);
-              if (taskDate > to) return false;
-            }
+          // Skip date filtering for active tasks in Kanban view
+          if (source === 'kanban' && isActivePendingOrProgress) {
+            // Don't apply date filter to Pending/In Progress tasks in Kanban - skip this entire block
           } else {
-            const taskDateRaw = t[dateField];
-            const taskDate = taskDateRaw ? new Date(taskDateRaw) : null;
-            if (!taskDate) return false;
+            // Apply date filtering for all other cases
+            if (datePreset === 'overdue') {
+              // Overdue is special: only applies if not complete and due date < today
+              if (t.status === 'Complete') return false;
+              const dueDate = t.due ? new Date(t.due) : null;
+              if (!dueDate) return false;
+              // Set dueDate to start of day for accurate comparison
+              const dueComp = new Date(dueDate);
+              dueComp.setHours(0, 0, 0, 0);
+              if (dueComp >= now) return false;
+            } else if (datePreset === 'custom') {
+              const taskDateRaw = t[dateField];
+              const taskDate = taskDateRaw ? new Date(taskDateRaw) : null;
+              if (!taskDate) return false;
 
-            let start = new Date(now);
-            let end = new Date(now);
-            end.setHours(23, 59, 59, 999);
+              if (dateFromEl?.value) {
+                const from = new Date(dateFromEl.value);
+                from.setHours(0, 0, 0, 0);
+                if (taskDate < from) return false;
+              }
+              if (dateToEl?.value) {
+                const to = new Date(dateToEl.value);
+                to.setHours(23, 59, 59, 999);
+                if (taskDate > to) return false;
+              }
+            } else {
+              const taskDateRaw = t[dateField];
+              const taskDate = taskDateRaw ? new Date(taskDateRaw) : null;
+              if (!taskDate) return false;
 
-            if (datePreset === 'today') {
-              // Already set
-            } else if (datePreset === 'this-week') {
-              const day = now.getDay();
-              start.setDate(now.getDate() - day);
-              end.setDate(now.getDate() + (6 - day));
+              let start = new Date(now);
+              let end = new Date(now);
               end.setHours(23, 59, 59, 999);
-            } else if (datePreset === 'last-week') {
-              const day = now.getDay();
-              start.setDate(now.getDate() - day - 7);
-              end.setDate(now.getDate() - day - 1);
-              end.setHours(23, 59, 59, 999);
-            } else if (datePreset === 'this-month') {
-              start = new Date(now.getFullYear(), now.getMonth(), 1);
-              end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+
+              if (datePreset === 'today') {
+                // Already set
+              } else if (datePreset === 'this-week') {
+                const day = now.getDay();
+                start.setDate(now.getDate() - day);
+                end.setDate(now.getDate() + (6 - day));
+                end.setHours(23, 59, 59, 999);
+              } else if (datePreset === 'last-week') {
+                const day = now.getDay();
+                start.setDate(now.getDate() - day - 7);
+                end.setDate(now.getDate() - day - 1);
+                end.setHours(23, 59, 59, 999);
+              } else if (datePreset === 'this-month') {
+                start = new Date(now.getFullYear(), now.getMonth(), 1);
+                end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+              }
+
+              if (taskDate < start || taskDate > end) return false;
             }
-
-            if (taskDate < start || taskDate > end) return false;
           }
         }
 
