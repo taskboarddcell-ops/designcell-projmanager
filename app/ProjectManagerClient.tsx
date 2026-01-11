@@ -70,7 +70,6 @@ const staticHtml = `
       </div>
 
       <div class="sb-new">
-        <button id="btnNewTask" class="btn">+ Task</button>
         <button id="btnNewProject" class="btn">+ Project</button>
         <button id="btnAddUser" class="btn">+ User</button>
       </div>
@@ -578,7 +577,6 @@ const staticHtml = `
             <option>High</option><option selected>Medium</option><option>Low</option>
           </select>
         </div>
-        <div><label class="small muted">Description (task title)</label><input id="tDesc" class="input" placeholder="Details…"></div>
       </div>
       <div style="margin-top:8px">
         <label class="small muted">Assign to (check)</label>
@@ -5492,7 +5490,7 @@ export default function ProjectManagerClient() {
     const tSub = el('tSub') as HTMLSelectElement | null;
     const tDue = el('tDue') as HTMLInputElement | null;
     const tPriority = el('tPriority') as HTMLSelectElement | null;
-    const tDesc = el('tDesc') as HTMLInputElement | null;
+
     const assigneesBox = el('assigneesBox');
     const taskCancel = el('taskCancel');
     const taskOK = el('taskOK');
@@ -5662,11 +5660,10 @@ export default function ProjectManagerClient() {
 
         const canEditTask =
           isAdmin() ||
-          editingTask.created_by_id === currentUser?.staff_id ||
           isProjectLeadFor(project.id);
 
         if (!canEditTask) {
-          toast('You do not have permission to modify this task.');
+          toast('Only Admins or Project Leads can edit tasks');
           editingTask = null;
           return;
         }
@@ -5684,42 +5681,16 @@ export default function ProjectManagerClient() {
           tDue.value = String(editingTask.due).slice(0, 10);
         if (tPriority && editingTask.priority)
           tPriority.value = editingTask.priority;
-        if (tDesc && editingTask.task) tDesc.value = editingTask.task;
       } else {
         // New task defaults
         if (tDue) tDue.value = '';
         if (tPriority) tPriority.value = 'Medium';
-        if (tDesc) tDesc.value = '';
       }
 
       showModal(taskModal);
     }
 
-    btnNewTask &&
-      btnNewTask.addEventListener('click', () => {
-        if (!currentUser) {
-          toast('Please login first');
-          return;
-        }
 
-        // Admins -> always
-        if (isAdmin()) {
-          openTaskModal(null);
-          return;
-        }
-
-        // Non-admins -> must be lead on at least one project
-        const leadProjects = projects.filter((p) =>
-          (p.lead_ids || []).includes(currentUser.staff_id),
-        );
-
-        if (leadProjects.length === 0) {
-          toast('Only Admins or Project Leads can create tasks');
-          return;
-        }
-
-        openTaskModal(null);
-      });
 
     taskCancel &&
       taskCancel.addEventListener('click', () => {
@@ -5729,7 +5700,7 @@ export default function ProjectManagerClient() {
 
     taskOK &&
       taskOK.addEventListener('click', async () => {
-        if (!tProject || !tDue || !tPriority || !tDesc) return;
+        if (!tProject || !tDue || !tPriority) return;
         if (!currentUser) {
           toast('Please login first');
           return;
@@ -5755,9 +5726,19 @@ export default function ProjectManagerClient() {
             }
           }
 
-          const title = tDesc.value.trim();
+          // Derive task title from stage and sub-stage
+          const stageValue = tStage?.value || '';
+          const subValue = tSub?.value || '';
+
+          let title = '';
+          if (subValue) {
+            title = subValue; // Use sub-stage name as title
+          } else if (stageValue) {
+            title = stageValue; // Use stage name if no sub-stage
+          }
+
           if (!title) {
-            toast('Enter a task description');
+            toast('Please select a stage and sub-stage for this task');
             return;
           }
 
@@ -5815,8 +5796,6 @@ export default function ProjectManagerClient() {
             if (currentUser) {
               if (isAdmin()) {
                 canEdit = true;
-              } else if (editingTask.created_by_id === currentUser.staff_id) {
-                canEdit = true;
               } else {
                 const projForTask = projects.find(
                   (p) => p.id === editingTask.project_id,
@@ -5828,7 +5807,7 @@ export default function ProjectManagerClient() {
             }
 
             if (!canEdit) {
-              toast('Only creator, Admin or project lead can edit this task');
+              toast('Only Admins or Project Leads can edit tasks');
               return;
             }
 
