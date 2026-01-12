@@ -1435,6 +1435,130 @@ tr.low {
   color: #1e293b !important;
 }
 
+/* ===== Sub-Task List UI (Project Structure) ===== */
+.sub-list-ui {
+  list-style: none;
+  padding: 0 !important;
+  margin: 12px 0 0 0 !important;
+  border-top: 2px solid #cbd5e1;
+  /* Clear division from Stage header */
+}
+
+.sub-item {
+  padding: 14px 10px;
+  border-bottom: 1.5px solid #e2e8f0;
+  /* Stronger, more visible line */
+  transition: all 0.2s ease;
+  border-radius: 4px;
+  margin-bottom: 2px;
+  /* Small gap to make lines more distinct */
+}
+
+.sub-item:last-child {
+  border-bottom: none;
+}
+
+.sub-item:hover {
+  background: #f8fafc;
+  transform: translateX(2px);
+}
+
+.sub-main-row {
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sub-item-title {
+  font-weight: 600;
+  font-size: 13.5px;
+  color: #1e293b;
+  flex: 1;
+}
+
+.sub-item-summary {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+
+.sub-item-summary strong {
+  color: #334155;
+}
+
+.tick-done {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  background: #10b981;
+  color: white;
+  border-radius: 50%;
+  font-size: 10px;
+  margin-right: 6px;
+  flex-shrink: 0;
+}
+
+.assignee-label {
+  background: #f1f5f9;
+  padding: 2px 8px;
+  border-radius: 12px;
+  color: #475569;
+  font-weight: 500;
+}
+
+.assignee-unassigned {
+  background: #fff1f2;
+  color: #e11d48;
+}
+
+.sub-assign {
+  min-width: 100px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.status-badge {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.status-badge[data-status="Complete"] {
+  background: #ecfdf5;
+  color: #059669;
+}
+
+.status-badge[data-status="In Progress"] {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.status-badge[data-status="Pending"] {
+  background: #f8fafc;
+  color: #64748b;
+  border: 1px solid #e2e8f0;
+}
+
+.status-badge[data-status="Needs Revision"] {
+  background: #fffbeb;
+  color: #d97706;
+}
+
+.status-badge[data-status="Rejected"] {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
 /* ===== Notifications ===== */
 .notification-badge {
   display: none !important;

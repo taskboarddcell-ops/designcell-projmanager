@@ -92,6 +92,10 @@ export async function createTask(
         sub: params.subId,
     });
 
+    if (!params.assigneeIds || params.assigneeIds.length === 0) {
+        return { success: false, error: 'At least one assignee is required' };
+    }
+
     try {
         const { data, error } = await supabase
             .from('tasks')
@@ -134,6 +138,10 @@ export async function updateTask(
     params: TaskUpdateParams
 ): Promise<{ success: boolean; error?: string }> {
     logger.info('Updating task', { taskId: params.taskId });
+
+    if (params.assigneeIds !== undefined && params.assigneeIds.length === 0) {
+        return { success: false, error: 'Cannot remove all assignees. At least one required.' };
+    }
 
     const updateData: any = {};
     if (params.assigneeIds !== undefined) updateData.assignee_ids = params.assigneeIds;
@@ -178,6 +186,17 @@ export async function bulkAssignTasks(
         stage: stageName,
         assigneeCount: assigneeIds.length,
     });
+
+    if (!assigneeIds || assigneeIds.length === 0) {
+        return {
+            success: false,
+            createdCount: 0,
+            updatedCount: 0,
+            skippedCount: 0,
+            error: 'At least one assignee is required',
+            tasks: [],
+        };
+    }
 
     // Find the stage in the project plan
     const plan = Array.isArray(project.stage_plan) ? project.stage_plan : [];

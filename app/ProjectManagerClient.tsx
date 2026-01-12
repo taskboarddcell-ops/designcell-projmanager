@@ -590,6 +590,28 @@ const staticHtml = `
     </div>
   </div>
 
+  <!-- ORPHAN TASKS CLEANUP MODAL -->
+  <div id="orphanTasksModal" class="modal">
+    <div class="mc" style="max-width:600px;">
+      <h3 style="margin:0 0 8px 0; color:#dc2626; display:flex; align-items:center; gap:8px;">
+        <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor">
+          <path d="M480-280q17 0 28.5-11.5T520-320q0-17-11.5-28.5T480-360q-17 0-28.5 11.5T440-320q0 17 11.5 28.5T480-280Zm-40-160h80v-240h-80v240Zm40 360q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-80q134 0 227-93t93-227q0-134-93-227t-227-93q-134 0-227 93t-93 227q0 134 93 227t227 93Zm0-320Z"/>
+        </svg>
+        Action Required: Unassigned Tasks
+      </h3>
+      <div style="margin-bottom:16px; font-size:14px; line-height:1.5;">
+        You have created or assigned tasks that currently have <b>no person responsible</b> for them. 
+        Please assign these tasks to a project member to ensure they are tracked correctly.
+      </div>
+      <div id="orphanTasksList" class="list" style="max-height:300px; overflow-y:auto; border:1px solid #fee2e2; background:#fffcfc; border-radius:6px; padding:4px;">
+        <!-- Orphaned tasks will be listed here -->
+      </div>
+      <div class="right" style="margin-top:20px;">
+        <button id="orphanDone" class="btn btn-primary">I'll finish this later</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ADD USER -->
   <div id="userModal" class="modal">
     <div class="mc">
@@ -1550,7 +1572,7 @@ export default function ProjectManagerClient() {
               return u?.name || id;
             });
 
-            if (assigneeIds.length === 0 && !state.taskId) {
+            if (assigneeIds.length === 0) {
               toast('Select at least one assignee');
               return;
             }
@@ -3424,6 +3446,133 @@ export default function ProjectManagerClient() {
       });
     }
 
+    async function performQuickAssign(taskId: string, assigneeIds: string[], assigneeNames: string[]) {
+      showLoading('Updating assignment...');
+      const result = await updateTask(supabase, {
+        taskId,
+        assigneeIds,
+        assigneeNames
+      });
+
+      if (result.success) {
+        const t = tasks.find(x => x.id === taskId);
+        if (t) {
+          t.assignee_ids = assigneeIds;
+          t.assignees = assigneeNames;
+        }
+        toast('Assignment updated');
+        // Refresh the list. If empty, checkOrphanTasks() will close the modal.
+        await checkOrphanTasks();
+        renderTasks();
+        renderKanban();
+        if (viewStages && viewStages.style.display !== 'none') {
+          renderProjectStructure();
+        }
+      } else {
+        toast('Failed to update: ' + result.error);
+      }
+      hideLoading();
+    }
+
+    async function checkOrphanTasks() {
+      if (!currentUser || !orphanTasksModal || !orphanTasksList) return;
+
+      const myOrphans = tasks.filter(t =>
+        t.created_by_id === currentUser.staff_id &&
+        (!t.assignee_ids || t.assignee_ids.length === 0)
+      );
+
+      if (myOrphans.length === 0) {
+        if (orphanTasksModal.classList.contains('show')) {
+          hideModal(orphanTasksModal);
+        }
+        return;
+      }
+
+      // Ensure users are loaded for the dropdown
+      if (!allUsers || allUsers.length === 0) {
+        await loadAllUsers();
+      }
+
+      const activeUsers = (allUsers || []).filter(u => u.status !== 'deactivated');
+      const userOptions = activeUsers.map(u =>
+        `<option value="${esc(u.staff_id)}" data-name="${esc(u.name || '')}">${esc(u.name || '')}</option>`
+      ).join('');
+
+      orphanTasksList.innerHTML = myOrphans.map(t => `
+        <div class="sub-item orphan-row" style="padding:12px; border-bottom:1px solid #fee2e2; background:#fff;">
+          <div style="margin-bottom:10px;">
+            <div style="font-weight:600; font-size:14px; color:#1e293b;">${esc(t.task)}</div>
+            <div class="small muted" style="margin-top:2px;">
+               ${esc(t.project_name)} <span style="margin:0 4px;">&rarr;</span> ${esc(t.stage_id || 'General')}
+            </div>
+          </div>
+          
+          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+            <button class="btn btn-sm self-assign" data-id="${esc(t.id)}" style="background:#10b981; color:white; border:none; padding:6px 10px; font-size:12px; cursor:pointer;">
+              Self Assign
+            </button>
+            
+            <div style="flex:1; display:flex; gap:4px; min-width:200px;">
+              <select class="select tiny orphan-user-select" style="flex:1; font-size:12px; padding:4px;">
+                <option value="">Assign to...</option>
+                ${userOptions}
+              </select>
+              <button class="btn btn-sm quick-assign-submit" data-id="${esc(t.id)}" style="background:#6366f1; color:white; border:none; padding:6px 10px; font-size:12px; cursor:pointer;">
+                Assign
+              </button>
+            </div>
+            
+            <button class="btn btn-sm btn-icon fix-orphan" data-id="${esc(t.id)}" title="Open full editor">
+              <svg xmlns="http://www.w3.org/2000/svg" height="18px" viewBox="0 -960 960 960" width="18px" fill="currentColor">
+                <path d="M200-200h57l391-391-57-57-391 391v57Zm-80 80v-170l528-527q12-11 26.5-17t30.5-6q16 0 31 6t26 18l55 56q12 11 17.5 26t5.5 30q0 16-5.5 30.5T817-647L290-120H120Zm640-584-56-56 56 56Zm-141 85-28-29 57 57-29-28Z"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      `).join('');
+
+      // Click Listeners
+      orphanTasksList.querySelectorAll('.self-assign').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const id = btn.getAttribute('data-id');
+          performQuickAssign(id, [currentUser.staff_id], [currentUser.name || currentUser.staff_id]);
+        });
+      });
+
+      orphanTasksList.querySelectorAll('.quick-assign-submit').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const id = btn.getAttribute('data-id');
+          const row = btn.closest('.orphan-row');
+          const select = row.querySelector('.orphan-user-select') as HTMLSelectElement;
+          const userId = select.value;
+          const opt = select.options[select.selectedIndex];
+          const userName = opt.getAttribute('data-name') || userId;
+
+          if (!userId) {
+            toast('Select a user first');
+            return;
+          }
+          performQuickAssign(id, [userId], [userName]);
+        });
+      });
+
+      orphanTasksList.querySelectorAll('.fix-orphan').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const id = btn.getAttribute('data-id');
+          const task = tasks.find(x => x.id === id);
+          if (task) {
+            hideModal(orphanTasksModal);
+            openTaskModal(task);
+          }
+        });
+      });
+
+      if (!orphanTasksModal.classList.contains('show')) {
+        showModal(orphanTasksModal);
+      }
+    }
+
     projSearch && projSearch.addEventListener('input', buildProjectSidebar);
     btnAllProjects &&
       btnAllProjects.addEventListener('click', () => {
@@ -4855,6 +5004,7 @@ export default function ProjectManagerClient() {
         refreshReviewTabStatus();
 
         hideLoading();
+        checkOrphanTasks();
       } catch (error) {
         console.error('Critical error in loadDataAfterLogin:', error);
         hideLoading();
@@ -5496,6 +5646,13 @@ export default function ProjectManagerClient() {
     const taskCancel = el('taskCancel');
     const taskOK = el('taskOK');
 
+    // ---------- ORPHAN TASKS CLEANUP MODAL ----------
+    const orphanTasksModal = el('orphanTasksModal');
+    const orphanTasksList = el('orphanTasksList');
+    const orphanDone = el('orphanDone');
+
+    orphanDone && orphanDone.addEventListener('click', () => hideModal(orphanTasksModal));
+
     // ---------- WORKLOAD DETAIL MODAL ----------
     const workloadDetailModal = el('workloadDetailModal');
     const wdName = el('wdName');
@@ -5796,6 +5953,11 @@ export default function ProjectManagerClient() {
             // Designer / others: force self
             assignee_ids = [currentUser.staff_id];
             assignees = [currentUser.name || currentUser.staff_id];
+          }
+
+          if (assignee_ids.length === 0) {
+            toast('Please select at least one assignee');
+            return;
           }
 
           const payload: any = {
@@ -7726,7 +7888,7 @@ export default function ProjectManagerClient() {
             const subs = s.subs || s.sub_stages || [];
 
             const subsHtml = subs.length
-              ? `<ul class="small sub-list-ui" style="margin-top:4px;padding-left:16px;">
+              ? `<ul class="sub-list-ui">
                 ${subs
                 .map((sb: string) => {
                   const stageName = stName;
@@ -7751,25 +7913,25 @@ export default function ProjectManagerClient() {
                   const isDone = primary && primary.status === 'Complete';
 
                   const assignedSummary = primary
-                    ? `<div class="small muted">
+                    ? `<div class="sub-item-summary">
                            ${isDone
-                      ? '<span class="tick-done" style="color:#16a34a;font-weight:700;font-size:14px;margin-right:4px;">✔</span>'
+                      ? '<span class="tick-done">✔</span>'
                       : ''
                     }
                            <strong>${esc(primary.task || '')}</strong>
                            ${(primary.assignees || []).length
-                      ? ' — <span class="assignee-label">' +
+                      ? '<span class="assignee-label">' +
                       esc(
                         (primary.assignees || []).join(', '),
                       ) +
                       '</span>'
-                      : ' — <span class="assignee-label assignee-unassigned">Unassigned</span>'
+                      : '<span class="assignee-label assignee-unassigned">Unassigned</span>'
                     }
                            ${primary.due
-                      ? ' · Due ' + esc(formatDate(primary.due))
+                      ? '<span>· Due ' + esc(formatDate(primary.due)) + '</span>'
                       : ''
                     }
-                           ${primary.status ? ' · ' + esc(primary.status) : ''}
+                           <span class="status-badge" data-status="${esc(primary.status || '')}">${esc(primary.status || '')}</span>
                          </div>`
                     : '';
 
@@ -7780,8 +7942,8 @@ export default function ProjectManagerClient() {
                           data-stage="${esc(stageName)}"
                           data-sub="${esc(subName)}"
                           ${hasTaskAttr}>
-                        <div class="sub-main-row" style="display:flex;align-items:center;gap:6px;justify-content:space-between;">
-                          <span>${esc(subName)}</span>
+                        <div class="sub-main-row">
+                          <span class="sub-item-title">${esc(subName)}</span>
                           <button type="button"
                                   class="btn-sm sub-assign"
                                   data-stage="${esc(stageName)}"
@@ -7921,7 +8083,43 @@ export default function ProjectManagerClient() {
             return;
           }
 
+          // GET OLD PLAN FOR COMPARISON
+          const oldProj = projects.find(p => p.id === layoutEditingProjectId);
+          const oldPlan = oldProj?.stage_plan || [];
+
           const newPlan = readStagePlanFromEditor(stagesBox);
+
+          // DETECT SUB-STAGE RENAMES AND CASCADE TO TASKS
+          const subRenames: { stageName: string; oldSub: string; newSub: string }[] = [];
+
+          // Build map of old subs per stage
+          const oldSubsMap: Record<string, string[]> = {};
+          (Array.isArray(oldPlan) ? oldPlan : []).forEach((s: any) => {
+            const stageName = s.stage || s.name || '';
+            oldSubsMap[stageName] = s.subs || s.sub_stages || [];
+          });
+
+          // Compare with new plan
+          newPlan.forEach((newStage: any) => {
+            const stageName = newStage.stage || '';
+            const oldSubs = oldSubsMap[stageName] || [];
+            const newSubs = newStage.subs || [];
+
+            // Check for position-based renames (assume index maps)
+            // This simple approach compares by index. If a sub at index i changed, treat it as a rename.
+            const minLen = Math.min(oldSubs.length, newSubs.length);
+            for (let i = 0; i < minLen; i++) {
+              if (oldSubs[i] && newSubs[i] && oldSubs[i] !== newSubs[i]) {
+                subRenames.push({
+                  stageName,
+                  oldSub: oldSubs[i],
+                  newSub: newSubs[i]
+                });
+              }
+            }
+          });
+
+          // Update the project stage_plan
           const { error } = await supabase
             .from('projects')
             .update({ stage_plan: newPlan })
@@ -7933,7 +8131,43 @@ export default function ProjectManagerClient() {
             return;
           }
 
-          toast('Layout saved');
+          // CASCADE UPDATES TO TASKS
+          if (subRenames.length > 0) {
+            let updatedCount = 0;
+            for (const rename of subRenames) {
+              // Update tasks that match this project + stage + old sub_id
+              const { data: affectedTasks, error: fetchErr } = await supabase
+                .from('tasks')
+                .select('id, task, sub_id, stage_id')
+                .eq('project_id', layoutEditingProjectId)
+                .eq('stage_id', rename.stageName)
+                .eq('sub_id', rename.oldSub);
+
+              if (!fetchErr && affectedTasks && affectedTasks.length > 0) {
+                for (const t of affectedTasks) {
+                  // Update sub_id and task title
+                  const newTaskTitle = t.task.replace(rename.oldSub, rename.newSub);
+                  await supabase
+                    .from('tasks')
+                    .update({
+                      sub_id: rename.newSub,
+                      task: newTaskTitle
+                    })
+                    .eq('id', t.id);
+                  updatedCount++;
+                }
+              }
+            }
+
+            if (updatedCount > 0) {
+              toast(`Layout saved. ${updatedCount} task(s) updated to match.`);
+            } else {
+              toast('Layout saved');
+            }
+          } else {
+            toast('Layout saved');
+          }
+
           layoutEditMode = false;
           layoutEditingProjectId = null;
           projectLayoutEditTargetId = null;
