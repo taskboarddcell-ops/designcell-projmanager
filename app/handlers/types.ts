@@ -134,6 +134,131 @@ export const STAGE_ORDER = [
     'MUNICIPAL',
 ];
 
+export const STAGE_ABBREVIATIONS: Record<string, string> = {
+    'PRELIMINARY': 'PR',
+    'ARCHITECTURAL DRAWINGS': 'AR',
+    'STRUCTURAL DRAWINGS': 'ST',
+    'SANITARY DRAWINGS': 'SAN',
+    'ELECTRICAL DRAWINGS': 'EL',
+    'SITE DEVELOPMENT DRAWING': 'SD',
+    'LANDSCAPE DEVELOPMENT': 'LD',
+    'MUNICIPAL': 'MU',
+    'OUTSOURCING': 'OUT',
+    'FINAL BOQ': 'BOQ',
+    'PRELIMINARY BOQ': 'P-BOQ',
+    'INTERIOR': 'INT',
+    'SANITARY DRAWING -SWIMMING POOL': 'SAN-SP',
+    'SANITARY DRAWINGS - VILLA BLOCK': 'SAN-VB'
+};
+
+/**
+ * Get abbreviation for a stage name
+ */
+export function getStageAbbr(stageName: string): string {
+    const normalized = (stageName || '').trim().toUpperCase();
+    if (STAGE_ABBREVIATIONS[normalized]) return STAGE_ABBREVIATIONS[normalized];
+
+    // Fuzzy match for stages with additional info like " - MAIN BUILDING"
+    for (const [fullName, abbr] of Object.entries(STAGE_ABBREVIATIONS)) {
+        if (normalized.startsWith(fullName)) return abbr;
+    }
+    return normalized;
+}
+
+/**
+ * Strips stage name, abbreviation, and substage name from the task title 
+ * to provide a concise display name.
+ */
+export function getConciseTaskTitle(taskTitle: string, subName: string, stageName: string): string {
+    if (!taskTitle) return '';
+    let cleaned = taskTitle.trim();
+    const cleanSub = (subName || '').trim();
+    const stageAbbr = getStageAbbr(stageName);
+
+    // List of tokens to potentially strip as redundant prefixes
+    const redundantTokens = [
+        stageName,
+        stageAbbr,
+        'SAN', 'SN', 'AR', 'ST', 'EL', 'LD', 'SD', 'PR', 'MU',
+    ];
+
+    // Handle stages with subtitles like "STAGE - SUBTITLE"
+    if (stageName.includes('-')) {
+        stageName.split('-').forEach(p => redundantTokens.push(p.trim()));
+    }
+
+    const sortedTokens = Array.from(new Set(redundantTokens))
+        .filter(t => t && t.length > 1)
+        .sort((a, b) => b.length - a.length);
+
+    let changed = true;
+    while (changed) {
+        changed = false;
+        const lowerCleaned = cleaned.toLowerCase();
+        for (const token of sortedTokens) {
+            const lowerToken = token.toLowerCase();
+            if (lowerCleaned.startsWith(lowerToken)) {
+                cleaned = cleaned.substring(token.length).replace(/^[\s\-\/\:\.]+/, '').trim();
+                changed = true;
+                break;
+            }
+        }
+    }
+
+    if (cleanSub) {
+        const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+        const normCleaned = normalize(cleaned);
+        const normSub = normalize(cleanSub);
+
+        // If one is almost entirely contained in the other, it's redundant
+        if (normCleaned === normSub ||
+            (normCleaned.length > 5 && normSub.includes(normCleaned)) ||
+            (normSub.length > 5 && normCleaned.includes(normSub))) {
+            return '';
+        }
+
+        const lowerCleaned = cleaned.toLowerCase();
+        const lowerSub = cleanSub.toLowerCase();
+
+        if (lowerCleaned.includes(lowerSub)) {
+            const idx = lowerCleaned.indexOf(lowerSub);
+            const before = cleaned.substring(0, idx);
+            const after = cleaned.substring(idx + cleanSub.length);
+            cleaned = (before + after).replace(/[\s\-\/\:\.]+/g, ' ').trim();
+        }
+    }
+
+    return cleaned.replace(/^[\s\-\/\:\.]+|[\s\-\/\:\.]+$/g, '').trim();
+}
+
+/**
+ * Strips stage-based prefixes from sub-stage names (e.g., "SAN-01-Title" -> "01-Title")
+ */
+export function getConciseSubTitle(subName: string, stageName: string): string {
+    if (!subName) return '';
+    const abbr = getStageAbbr(stageName);
+    let cleaned = subName.trim();
+
+    // Check for "ABBR-" or "ABBR " prefix
+    const prefixes = [abbr + '-', abbr + ' '];
+    for (const p of prefixes) {
+        if (cleaned.toUpperCase().startsWith(p.toUpperCase())) {
+            cleaned = cleaned.substring(p.length).trim();
+            break;
+        }
+    }
+
+    return cleaned;
+}
+
+/**
+ * Translates internal status to user-friendly display name
+ */
+export function getDisplayStatus(status: string): string {
+    if (status === 'Needs Revision') return 'Revision after completion';
+    return status;
+}
+
 export const STAGE_ORDER_MAP = new Map(
     STAGE_ORDER.map((name, idx) => [name.toUpperCase(), idx])
 );

@@ -19,7 +19,7 @@ import {
   fetchProjects, sortProjectsByYear, filterProjectsByYear, updateProjectStatus, adjustTaskDatesAfterHold,
 
   // Utilities
-  esc, formatDate, getProjectYear, isAdmin, canUserChangeTaskStatus,
+  esc, formatDate, getProjectYear, isAdmin, canUserChangeTaskStatus, getStageAbbr, getConciseTaskTitle, getConciseSubTitle, getDisplayStatus,
 
   // User Handlers
   loginUser, loadSession, saveSession, clearSession,
@@ -201,7 +201,7 @@ const staticHtml = `
             <select id="filterStatus" class="select" style="min-width:180px">
               <option value="Pending" selected>Pending</option>
               <option value="In Progress">In Progress</option>
-              <option value="Needs Revision">Needs Revision</option>
+              <option value="Needs Revision">Revision after completion</option>
               <option value="Complete">Completed</option>
               <option value="All">All</option>
             </select>
@@ -317,7 +317,7 @@ const staticHtml = `
               <option value="All" selected>All</option>
               <option value="Pending">Pending</option>
               <option value="In Progress">In Progress</option>
-              <option value="Needs Revision">Needs Revision</option>
+              <option value="Needs Revision">Revision after completion</option>
               <option value="Complete">Completed</option>
             </select>
             <div class="search-wrap" style="min-width:240px;">
@@ -396,7 +396,7 @@ const staticHtml = `
                   <span class="kchip hi" title="High"></span>
                   <span class="kchip med" title="Medium"></span>
                   <span class="kchip low" title="Low"></span>
-                  Needs Revision
+                  Revision After Completion
                 </div>
                 <span class="kcount" id="countRevision">0</span>
               </div>
@@ -688,7 +688,7 @@ const staticHtml = `
       
       <div class="right" style="margin-top:20px; gap:8px;">
         <button id="reviewFeedbackCancel" class="btn">Cancel</button>
-        <button id="btnRequestRevision" class="btn" style="background:#f59e0b; color:white;">Needs Revision</button>
+        <button id="btnRequestRevision" class="btn" style="background:#f59e0b; color:white;">Revision after completion</button>
         <button id="btnAcceptCompletion" class="btn btn-primary">Accept & Complete</button>
       </div>
     </div>
@@ -720,7 +720,7 @@ const staticHtml = `
       <select id="stSel" class="select">
         <option>Pending</option>
         <option>In Progress</option>
-        <option>Needs Revision</option>
+        <option>Revision after completion</option>
         <option>Complete</option>
       </select>
       <label class="small muted" style="margin-top:6px">Note (optional)</label>
@@ -889,7 +889,7 @@ const staticHtml = `
             <div id="pwStatusList" class="grid2" style="margin-top:4px;">
               <label class="small"><input type="checkbox" value="Pending" checked> Pending</label>
               <label class="small"><input type="checkbox" value="In Progress" checked> In Progress</label>
-              <label class="small"><input type="checkbox" value="Needs Revision" checked> Needs Revision</label>
+              <label class="small"><input type="checkbox" value="Needs Revision" checked> Revision after completion</label>
               <label class="small"><input type="checkbox" value="Complete" checked> Completed</label>
             </div>
           </div>
@@ -1603,7 +1603,7 @@ export default function ProjectManagerClient() {
               }
             } else {
               // CREATE NEW
-              const title = `${stageName} - ${subName}`;
+              const title = `${getStageAbbr(stageName)} - ${subName}`;
               const result = await createTask(supabase, {
                 projectId: proj.id,
                 projectName: proj.name,
@@ -4256,7 +4256,7 @@ export default function ProjectManagerClient() {
                   : t.status === 'Rejected'
                     ? '<span class="small" style="color:#ef4444;">✗ Rejected</span>'
                     : t.status === 'Needs Revision'
-                      ? '<span class="small" style="color:#f59e0b;">🔄 Needs Revision</span>'
+                      ? '<span class="small" style="color:#f59e0b;">🔄 Revision after completion</span>'
                       : ''
             }
             <button class="btn-sm act-edit" data-id="${esc(t.id)}">Edit</button>
@@ -4320,7 +4320,7 @@ export default function ProjectManagerClient() {
 
             ${t.status === 'Needs Revision'
             ? `<div class="kcard-revision">
-                  <strong>Revision:</strong> ${esc(t.review_comments || '')}
+                  <strong>Revision after completion:</strong> ${esc(t.review_comments || '')}
                  </div>`
             : ''}
             
@@ -7912,13 +7912,18 @@ export default function ProjectManagerClient() {
 
                   const isDone = primary && primary.status === 'Complete';
 
+                  const taskTitle = (primary?.task || '').trim();
+                  const cleanSubName = (subName || '').trim();
+
+                  const displayTitle = getConciseTaskTitle(taskTitle, subName, stageName);
+
                   const assignedSummary = primary
                     ? `<div class="sub-item-summary">
                            ${isDone
-                      ? '<span class="tick-done">✔</span>'
+                      ? `<span class="tick-done" title="Complete">✔</span> <span class="completion-marker">Complete</span>`
                       : ''
                     }
-                           <strong>${esc(primary.task || '')}</strong>
+                           ${displayTitle ? `<strong>${esc(displayTitle)}</strong>` : ''}
                            ${(primary.assignees || []).length
                       ? '<span class="assignee-label">' +
                       esc(
@@ -7928,14 +7933,15 @@ export default function ProjectManagerClient() {
                       : '<span class="assignee-label assignee-unassigned">Unassigned</span>'
                     }
                            ${primary.due
-                      ? '<span>· Due ' + esc(formatDate(primary.due)) + '</span>'
+                      ? '<span class="due-label">· Due ' + esc(formatDate(primary.due)) + '</span>'
                       : ''
                     }
-                           <span class="status-badge" data-status="${esc(primary.status || '')}">${esc(primary.status || '')}</span>
+                           ${!isDone ? `<span class="status-badge" data-status="${esc(primary.status || '')}">${esc(getDisplayStatus(primary.status || ''))}</span>` : ''}
                          </div>`
                     : '';
 
-                  const buttonLabel = primary ? 'Modify Task' : 'Assign Task';
+                  const buttonLabel = isDone ? 'View details' : (primary ? 'Modify Task' : 'Assign Task');
+                  const buttonClass = isDone ? 'btn-sm sub-assign btn-ghost' : 'btn-sm sub-assign' + (primary ? '' : ' btn-primary');
 
                   return `
                       <li class="sub-item"
@@ -7943,9 +7949,9 @@ export default function ProjectManagerClient() {
                           data-sub="${esc(subName)}"
                           ${hasTaskAttr}>
                         <div class="sub-main-row">
-                          <span class="sub-item-title">${esc(subName)}</span>
+                          <span class="sub-item-title">${esc(getConciseSubTitle(subName, stageName))}</span>
                           <button type="button"
-                                  class="btn-sm sub-assign"
+                                  class="${buttonClass}"
                                   data-stage="${esc(stageName)}"
                                   data-sub="${esc(subName)}"
                                   data-task-id="${primary ? esc(primary.id) : ''}">
@@ -7963,7 +7969,7 @@ export default function ProjectManagerClient() {
             return `
             <div class="card" style="margin-bottom:8px">
               <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
-                 <div><strong>${esc(stName)}</strong></div>
+                  <div class="stage-group-label"><span class="stage-abbr">${esc(getStageAbbr(stName))}</span> <span class="stage-full-name">${esc(stName)}</span></div>
                  ${canEdit ? `<button class="btn-xs stage-bulk-assign" data-stage="${esc(stName)}" style="padding:2px 8px;font-size:11px;background:var(--bg-hover);">Bulk Assign</button>` : ''}
               </div>
               ${subsHtml}
@@ -9443,10 +9449,10 @@ export default function ProjectManagerClient() {
         kanbanRow.style.breakInside = 'auto';
 
         statuses.forEach(status => {
-          // Map 'Needs Revision' to 'Review' for display
+          // Map 'Needs Revision' to 'Revision after completion' for display
           const statusTasks = tasksToPrint.filter(t => {
             const taskStatus = t.status || 'Pending';
-            if (status === 'Review') {
+            if (status === 'Revision after completion') {
               return taskStatus === 'Needs Revision';
             }
             return taskStatus === status;

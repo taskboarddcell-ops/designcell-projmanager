@@ -8,7 +8,11 @@
  */
 
 // Types and utilities
-export * from './types';
+export {
+    type Task, type Project, type User, type AssignState,
+    esc, formatDate, getProjectYear, isAdmin, canUserChangeTaskStatus,
+    STAGE_ORDER, getStageAbbr, getConciseTaskTitle, getConciseSubTitle, getDisplayStatus
+} from './types';
 
 // Task handlers
 export {
