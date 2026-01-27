@@ -7536,7 +7536,12 @@ export default function ProjectManagerClient() {
     // Sort stages according to predefined order (uses STAGE_ORDER defined above)
     // Sort stages according to predefined order (uses STAGE_ORDER defined above)
     function sortStagesByOrder(stages: any[]): any[] {
-      return [...stages].sort((a, b) => {
+      if (!Array.isArray(stages)) return [];
+
+      // Filter out null/undefined values to prevent crashes
+      const validStages = stages.filter(s => s !== null && s !== undefined);
+
+      return [...validStages].sort((a, b) => {
         const aName = (a.stage || a.name || '').trim().toUpperCase();
         const bName = (b.stage || b.name || '').trim().toUpperCase();
 
@@ -8013,10 +8018,12 @@ export default function ProjectManagerClient() {
             })()
             : [];
 
-        const normalizedPlan = planArray.map((s: any) => ({
-          stage: s.stage || s.name || '',
-          subs: s.subs || s.sub_stages || [],
-        }));
+        const normalizedPlan = planArray
+          .filter(s => s !== null && s !== undefined)
+          .map((s: any) => ({
+            stage: s.stage || s.name || '',
+            subs: s.subs || s.sub_stages || [],
+          }));
 
         // Sort stages in edit mode as well
         const sortedNormalizedPlan = sortStagesByOrder(normalizedPlan);
