@@ -89,7 +89,7 @@ Added a **bulk delete** feature that allows admin users to select and delete mul
      - Select all checkbox
      - Individual checkboxes
      - Bulk delete button
-   - Added `updateBulkDeleteUI()` helper function
+   - Added `updateBulkActionsUI()` helper function
 
 ## Security Features
 

@@ -6630,7 +6630,7 @@ export default function ProjectManagerClient() {
 
           // Reset checkboxes
           if (selectAllCheckbox) selectAllCheckbox.checked = false;
-          updateBulkDeleteUI();
+          updateBulkActionsUI();
         } else {
           toast('Failed to delete tasks: ' + (result.errors[0] || 'Unknown error'));
         }
@@ -6641,9 +6641,7 @@ export default function ProjectManagerClient() {
         // Restore button state
         if (bulkDeleteBtn) {
           bulkDeleteBtn.disabled = false;
-          if (selectedCountSpan) {
-            bulkDeleteBtn.innerHTML = `Delete Selected (<span id="selectedCount">0</span>)`;
-          }
+          bulkDeleteBtn.textContent = 'Delete';
         }
       }
     });
