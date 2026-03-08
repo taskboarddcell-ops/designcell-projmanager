@@ -5363,7 +5363,7 @@ export default function ProjectManagerClient() {
       editor.innerHTML = '';
 
       // Create rows
-      workingPlan.forEach((st) => {
+      workingPlan.filter((st: any) => st !== null && st !== undefined).forEach((st) => {
         const row = createStageRowDOM(st.stage, st.subs || []);
         editor.appendChild(row);
         wireStageRow(row);
@@ -8105,7 +8105,7 @@ export default function ProjectManagerClient() {
 
           // Build map of old subs per stage
           const oldSubsMap: Record<string, string[]> = {};
-          (Array.isArray(oldPlan) ? oldPlan : []).forEach((s: any) => {
+          (Array.isArray(oldPlan) ? oldPlan : []).filter((s: any) => s !== null && s !== undefined).forEach((s: any) => {
             const stageName = s.stage || s.name || '';
             oldSubsMap[stageName] = s.subs || s.sub_stages || [];
           });
