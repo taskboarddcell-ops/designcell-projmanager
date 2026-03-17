@@ -1710,19 +1710,45 @@ export default function ProjectManagerClient() {
       const now = new Date();
       now.setHours(0, 0, 0, 0);
 
+      let totalDC16Found = 0;
+      let dc16PassedPermissions = 0;
+      let dc16PassedProject = 0;
+      let dc16PassedSearch = 0;
+      let dc16PassedAssignee = 0;
+      let dc16PassedStatus = 0;
+
       let filtered = tasks.filter((t) => {
-        // Permission
-        if (!userCanSeeTask(t)) return false;
+        const isDC16 = (t.assignee_ids || []).some(id => (id || '').trim().toUpperCase() === 'DC16');
+        if (isDC16) totalDC16Found++;
+
+        // Permission check MUST happen first
+        if (!userCanSeeTask(t)) {
+          if (isDC16) console.warn(`[FILTER] DC16 task "${t.task}" (ID: ${t.id}) hidden by PERMISSIONS.`);
+          return false;
+        }
+        if (isDC16) dc16PassedPermissions++;
+
+        if (isDC16) {
+          // Diagnostic log: check if project or filters hide it
+        }
 
         // Project filter
         const project = projects.find(p => p.id === t.project_id || p.name === t.project_name);
+        if (!project && isDC16) {
+          // console.log(`[FILTER] DC16 task project not found in local projects array: "${t.project_name}" (ID: ${t.project_id})`);
+        }
 
         // Requirement: If a project is put on hold, all tasks relating to that should be hidden
         if (project && project.project_status === 'On Hold') {
+          if (isDC16) console.warn(`[FILTER] DC16 task "${t.task}" hidden because project "${project.name}" is ON HOLD.`);
           return false;
         }
 
-        if (activeProjectName && t.project_name !== activeProjectName) return false;
+        if (activeProjectName && t.project_name !== activeProjectName) {
+          if (isDC16) console.warn(`[FILTER] DC16 task "${t.task}" hidden by PROJECT selection. Active: "${activeProjectName}", Task: "${t.project_name}"`);
+          return false;
+        }
+        if (isDC16) dc16PassedProject++;
 
         // Search filter
         if (searchQuery) {
@@ -1734,40 +1760,51 @@ export default function ProjectManagerClient() {
             ...(t.assignees || [])
           ].join(' ').toLowerCase();
 
-          if (!searchableText.includes(searchQuery)) return false;
+          if (!searchableText.includes(searchQuery)) {
+            if (isDC16) console.warn(`[FILTER] DC16 task "${t.task}" hidden by search query: "${searchQuery}"`);
+            return false;
+          }
         }
+        if (isDC16) dc16PassedSearch++;
 
         // Assignee filter
         if (assigneeFilter) {
           const names = t.assignees || [];
-          if (!names.includes(assigneeFilter)) return false;
-        }
-
-        // Status filter
-        if (statusFilterSelection !== 'All') {
-          // Normalize status for comparison to handle minor inconsistencies
-          const targetStatus = statusFilterSelection === 'Completed' ? 'Complete' : statusFilterSelection;
-          const taskStatus = t.status || 'Pending';
-
-          // Direct match or mapped match
-          if (taskStatus !== targetStatus &&
-            !(targetStatus === 'In Progress' && taskStatus === 'In Progress') &&
-            !(targetStatus === 'Complete' && taskStatus === 'Completed')) {
+          if (!names.includes(assigneeFilter)) {
+            if (isDC16) console.warn(`[FILTER] DC16 task "${t.task}" hidden by assignee filter: "${assigneeFilter}"`);
             return false;
           }
         }
 
+        // Status filter
+        if (statusFilterSelection !== 'All') {
+          const target = (statusFilterSelection === 'Completed' ? 'Complete' : statusFilterSelection).toLowerCase().trim();
+          const actual = (t.status || 'Pending').toLowerCase().trim();
+
+          const isMatch = (target === actual) ||
+            (target === 'pending' && actual === '') ||
+            (target === 'complete' && actual === 'completed') ||
+            (target === 'in progress' && actual === 'progress');
+
+          if (!isMatch) {
+            if (isDC16) console.warn(`[FILTER] DC16 task "${t.task}" hidden by STATUS filter. Selection: "${statusFilterSelection}", Task: "${t.status}"`);
+            return false;
+          }
+        }
+        if (isDC16) dc16PassedStatus++;
+
         // Advanced Date Filtering
-        // For Kanban board: Skip date filters for Pending and In Progress tasks
-        // Only apply date filters to Complete tasks
-        const taskStatus = t.status || 'Pending';
-        const isActivePendingOrProgress = (taskStatus === 'Pending' || taskStatus === 'In Progress');
+        const taskStatus_ = t.status || 'Pending';
+        const isActivePendingOrProgress = (taskStatus_ === 'Pending' || taskStatus_ === 'In Progress');
 
         if (datePreset !== 'all') {
           // Skip date filtering for active tasks in Kanban view
           if (source === 'kanban' && isActivePendingOrProgress) {
-            // Don't apply date filter to Pending/In Progress tasks in Kanban - skip this entire block
+            // Don't apply date filter to Pending/In Progress tasks in Kanban
           } else {
+            if ((isDC16 as any) && !isActivePendingOrProgress) {
+              console.log(`[FILTER] Task "${t.task}" is subject to DATE filter: ${datePreset}`);
+            }
             // Apply date filtering for all other cases
             if (datePreset === 'overdue') {
               // Overdue is special: only applies if not complete and due date < today
@@ -1826,6 +1863,18 @@ export default function ProjectManagerClient() {
 
         return true;
       });
+
+      if (totalDC16Found > 0) {
+        console.log(`[DIAG] Filter results for DC16 (${source}):`, {
+          totalFoundInRaw: totalDC16Found,
+          passedPermissions: dc16PassedPermissions,
+          passedProject: dc16PassedProject,
+          passedSearch: dc16PassedSearch,
+          passedAssignee: dc16PassedAssignee,
+          passedStatus: dc16PassedStatus,
+          finalVisible: filtered.filter(t => (t.assignee_ids || []).some((id: any) => (id || '').toUpperCase() === 'DC16')).length
+        });
+      }
 
       return filtered;
     }
@@ -2062,24 +2111,27 @@ export default function ProjectManagerClient() {
     };
 
     const isAssignee = (taskAssignees: string[] | null | undefined) => {
-      return currentUser && Array.isArray(taskAssignees) && taskAssignees.includes(currentUser.staff_id);
+      if (!currentUser || !Array.isArray(taskAssignees)) return false;
+      const myId = (currentUser.staff_id || '').trim().toUpperCase();
+      return taskAssignees.some(id => (id || '').trim().toUpperCase() === myId);
     };
 
     const userCanSeeTask = (task: any) => {
       if (!currentUser) return false;
       if (isAdmin()) return true;
       if (isAssignee(task.assignee_ids || [])) return true;
-      if (task.created_by_id === currentUser.staff_id) return true;
+      if (task.created_by_id && (task.created_by_id || '').trim().toUpperCase() === (currentUser.staff_id || '').trim().toUpperCase()) return true;
       // Project leads should see tasks in their projects
       if (task.project_id && isProjectLeadFor(task.project_id)) return true;
       return false;
     };
 
     const isProjectLeadFor = (projectId: string) => {
-      if (!currentUser) return false;
+      if (!currentUser || !projectId) return false;
       const proj = projects.find((p) => p.id === projectId);
       if (!proj) return false;
-      return (proj.lead_ids || []).includes(currentUser.staff_id);
+      const myId = (currentUser.staff_id || '').trim().toUpperCase();
+      return (proj.lead_ids || []).some(id => (id || '').trim().toUpperCase() === myId);
     };
 
     // Handle task assignment notifications
@@ -4174,6 +4226,7 @@ export default function ProjectManagerClient() {
       body.innerHTML = '';
 
       const visible = getFilteredTasks('list');
+      console.log(`[RENDER] Rendering Task List. Visible tasks: ${visible.length}`);
       const sortSelect = el('taskSortBy') as HTMLSelectElement | null;
       const sortVal = sortSelect ? sortSelect.value : 'due_asc';
 
@@ -4979,9 +5032,9 @@ export default function ProjectManagerClient() {
         const { data: taskData, error: taskError } = await supabase
           .from('tasks')
           .select('*')
-          .eq('is_deleted', false) // Filter deleted
+          .eq('is_deleted', false)
           .order('due', { ascending: true })
-          .range(0, 1999);
+          .limit(10000); // Properly use limit instead of range for large datasets
 
         if (taskError) {
           console.error('Tasks error', taskError);
@@ -4992,8 +5045,26 @@ export default function ProjectManagerClient() {
           tasks = taskData || [];
         }
 
+        console.log('[LOAD] Raw tasks from DB:', tasks.slice(0, 5));
+        const testDC16 = tasks.filter(t => (t.assignee_ids || []).some((id: any) => (id || '').toUpperCase() === 'DC16'));
+        console.log('[LOAD] DC16 Raw Count:', testDC16.length);
+
         buildProjectSidebar();
         refreshAssigneeFilters();
+
+        console.log('[LOAD] Data fully loaded.', {
+          totalProjects: projects.length,
+          totalTasks: tasks.length,
+          currentUser: currentUser?.staff_id
+        });
+
+        // Global debug helper
+        (window as any).debugTasks = () => {
+          const dc16 = tasks.filter(t => (t.assignee_ids || []).some((id: any) => (id || '').toUpperCase() === 'DC16'));
+          console.table(dc16.map(t => ({ task: t.task, status: t.status, project: t.project_name, due: t.due })));
+          return dc16;
+        };
+
         renderTasks();
         renderKanban();
         if (viewStages && viewStages.style.display !== 'none') {
