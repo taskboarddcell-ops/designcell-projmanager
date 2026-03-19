@@ -718,10 +718,10 @@ const staticHtml = `
       <h3 style="margin:0 0 8px 0">Update Status</h3>
       <label class="small muted">New status</label>
       <select id="stSel" class="select">
-        <option>Pending</option>
-        <option>In Progress</option>
-        <option>Revision after completion</option>
-        <option>Complete</option>
+        <option value="Pending">Pending</option>
+        <option value="In Progress">In Progress</option>
+        <option value="Needs Revision">Revision after completion</option>
+        <option value="Complete">Complete</option>
       </select>
       <label class="small muted" style="margin-top:6px">Note (optional)</label>
       <textarea id="stNote" class="input" style="height:88px"></textarea>
@@ -1710,45 +1710,25 @@ export default function ProjectManagerClient() {
       const now = new Date();
       now.setHours(0, 0, 0, 0);
 
-      let totalDC16Found = 0;
-      let dc16PassedPermissions = 0;
-      let dc16PassedProject = 0;
-      let dc16PassedSearch = 0;
-      let dc16PassedAssignee = 0;
-      let dc16PassedStatus = 0;
 
       let filtered = tasks.filter((t) => {
-        const isDC16 = (t.assignee_ids || []).some(id => (id || '').trim().toUpperCase() === 'DC16');
-        if (isDC16) totalDC16Found++;
 
-        // Permission check MUST happen first
+        // Permission check
         if (!userCanSeeTask(t)) {
-          if (isDC16) console.warn(`[FILTER] DC16 task "${t.task}" (ID: ${t.id}) hidden by PERMISSIONS.`);
           return false;
-        }
-        if (isDC16) dc16PassedPermissions++;
-
-        if (isDC16) {
-          // Diagnostic log: check if project or filters hide it
         }
 
         // Project filter
         const project = projects.find(p => p.id === t.project_id || p.name === t.project_name);
-        if (!project && isDC16) {
-          // console.log(`[FILTER] DC16 task project not found in local projects array: "${t.project_name}" (ID: ${t.project_id})`);
-        }
 
         // Requirement: If a project is put on hold, all tasks relating to that should be hidden
         if (project && project.project_status === 'On Hold') {
-          if (isDC16) console.warn(`[FILTER] DC16 task "${t.task}" hidden because project "${project.name}" is ON HOLD.`);
           return false;
         }
 
         if (activeProjectName && t.project_name !== activeProjectName) {
-          if (isDC16) console.warn(`[FILTER] DC16 task "${t.task}" hidden by PROJECT selection. Active: "${activeProjectName}", Task: "${t.project_name}"`);
           return false;
         }
-        if (isDC16) dc16PassedProject++;
 
         // Search filter
         if (searchQuery) {
@@ -1761,17 +1741,14 @@ export default function ProjectManagerClient() {
           ].join(' ').toLowerCase();
 
           if (!searchableText.includes(searchQuery)) {
-            if (isDC16) console.warn(`[FILTER] DC16 task "${t.task}" hidden by search query: "${searchQuery}"`);
             return false;
           }
         }
-        if (isDC16) dc16PassedSearch++;
 
         // Assignee filter
         if (assigneeFilter) {
           const names = t.assignees || [];
           if (!names.includes(assigneeFilter)) {
-            if (isDC16) console.warn(`[FILTER] DC16 task "${t.task}" hidden by assignee filter: "${assigneeFilter}"`);
             return false;
           }
         }
@@ -1784,14 +1761,13 @@ export default function ProjectManagerClient() {
           const isMatch = (target === actual) ||
             (target === 'pending' && actual === '') ||
             (target === 'complete' && actual === 'completed') ||
-            (target === 'in progress' && actual === 'progress');
+            (target === 'in progress' && actual === 'progress') ||
+            (target === 'needs revision' && actual === 'revision after completion');
 
           if (!isMatch) {
-            if (isDC16) console.warn(`[FILTER] DC16 task "${t.task}" hidden by STATUS filter. Selection: "${statusFilterSelection}", Task: "${t.status}"`);
             return false;
           }
         }
-        if (isDC16) dc16PassedStatus++;
 
         // Advanced Date Filtering
         const taskStatus_ = t.status || 'Pending';
@@ -1802,9 +1778,6 @@ export default function ProjectManagerClient() {
           if (source === 'kanban' && isActivePendingOrProgress) {
             // Don't apply date filter to Pending/In Progress tasks in Kanban
           } else {
-            if ((isDC16 as any) && !isActivePendingOrProgress) {
-              console.log(`[FILTER] Task "${t.task}" is subject to DATE filter: ${datePreset}`);
-            }
             // Apply date filtering for all other cases
             if (datePreset === 'overdue') {
               // Overdue is special: only applies if not complete and due date < today
@@ -1863,18 +1836,6 @@ export default function ProjectManagerClient() {
 
         return true;
       });
-
-      if (totalDC16Found > 0) {
-        console.log(`[DIAG] Filter results for DC16 (${source}):`, {
-          totalFoundInRaw: totalDC16Found,
-          passedPermissions: dc16PassedPermissions,
-          passedProject: dc16PassedProject,
-          passedSearch: dc16PassedSearch,
-          passedAssignee: dc16PassedAssignee,
-          passedStatus: dc16PassedStatus,
-          finalVisible: filtered.filter(t => (t.assignee_ids || []).some((id: any) => (id || '').toUpperCase() === 'DC16')).length
-        });
-      }
 
       return filtered;
     }
@@ -2185,8 +2146,8 @@ export default function ProjectManagerClient() {
         });
 
         if (!response.ok) {
-          const error = await response.json();
-          console.error('Create task assignment notification error:', error);
+          const errData = await response.json().catch(() => ({ error: 'Unknown response' }));
+          console.error('Create task assignment notification error. Status:', response.status, 'Error:', errData);
         }
       } catch (error) {
         console.error('Create task assignment notification error:', error);
@@ -2227,9 +2188,9 @@ export default function ProjectManagerClient() {
         // Create notifications
         const notifications = notifyUsers.map((staffId) => ({
           user_id: staffId,
-          type: 'TASK_STATUS_UPDATE',
-          title: `Task status updated: ${task.task || 'Untitled'}`,
-          body: `${changedByName} changed task status from "${fromStatus}" to "${toStatus}" in project "${task.project_name || 'Unknown'}".`,
+          type: 'TASK_ASSIGNED', // Fallback to TASK_ASSIGNED due to DB constraint
+          title: `Status updated: ${task.task || 'Untitled'}`,
+          body: `${changedByName} changed status from "${fromStatus}" to "${toStatus}" in project "${task.project_name || 'Unknown'}".`,
           link_url: `/tasks/${task.id}`,
         }));
 
@@ -2247,8 +2208,8 @@ export default function ProjectManagerClient() {
           const result = await response.json();
           console.log('[NOTIFICATION] Successfully created', result.created || 0, 'notifications');
         } else {
-          const error = await response.json();
-          console.error('[NOTIFICATION] Insert failed:', error);
+          const errData = await response.json().catch(() => ({ error: 'Unknown response' }));
+          console.error('[NOTIFICATION] Insert failed. Response status:', response.status, 'Error:', errData);
         }
       } catch (error) {
         console.error('Create task status notification error:', error);
@@ -2271,7 +2232,7 @@ export default function ProjectManagerClient() {
         // Create notifications for each assignee
         const notifications = notifyUsers.map((staffId: string) => ({
           user_id: staffId,
-          type: 'TASK_REVISION_REQUESTED',
+          type: 'TASK_ASSIGNED', // Fallback due to DB constraint
           title: `Revision requested: ${task.task || 'Untitled'}`,
           body: `${reviewerName} requested revisions for your task in "${task.project_name || 'Unknown'}". Feedback: ${revisionComments}`,
           link_url: `/tasks/${task.id}`,
@@ -2291,8 +2252,8 @@ export default function ProjectManagerClient() {
           const result = await response.json();
           console.log('[NOTIFICATION] Successfully created', result.created || 0, 'revision notifications');
         } else {
-          const error = await response.json();
-          console.error('[NOTIFICATION] Revision notification insert failed:', error);
+          const errData = await response.json().catch(() => ({ error: 'Unknown response' }));
+          console.error('[NOTIFICATION] Revision notification insert failed:', errData);
         }
       } catch (error) {
         console.error('Create revision notification error:', error);
@@ -2315,7 +2276,7 @@ export default function ProjectManagerClient() {
         // Create notifications for each assignee
         const notifications = notifyUsers.map((staffId: string) => ({
           user_id: staffId,
-          type: 'TASK_REJECTED',
+          type: 'TASK_ASSIGNED', // Fallback
           title: `Task rejected: ${task.task || 'Untitled'}`,
           body: `${reviewerName} rejected your task in "${task.project_name || 'Unknown'}". Reason: ${rejectionReason}`,
           link_url: `/tasks/${task.id}`,
@@ -2335,8 +2296,8 @@ export default function ProjectManagerClient() {
           const result = await response.json();
           console.log('[NOTIFICATION] Successfully created', result.created || 0, 'rejection notifications');
         } else {
-          const error = await response.json();
-          console.error('[NOTIFICATION] Rejection notification insert failed:', error);
+          const errData = await response.json().catch(() => ({ error: 'Unknown response' }));
+          console.error('[NOTIFICATION] Rejection notification insert failed:', errData);
         }
       } catch (error) {
         console.error('Create rejection notification error:', error);
@@ -5029,25 +4990,46 @@ export default function ProjectManagerClient() {
           projects = projData || [];
         }
 
-        const { data: taskData, error: taskError } = await supabase
-          .from('tasks')
-          .select('*')
-          .eq('is_deleted', false)
-          .order('due', { ascending: true })
-          .limit(10000); // Properly use limit instead of range for large datasets
+        // Fetch ALL tasks using pagination (Supabase caps at 1000 per request)
+        let allTasks: any[] = [];
+        let page = 0;
+        const PAGE_SIZE = 1000;
+        let hasMore = true;
 
-        if (taskError) {
-          console.error('Tasks error', taskError);
-          toast('Failed to load tasks');
-          hideLoading();
-          return;
-        } else {
-          tasks = taskData || [];
+        while (hasMore) {
+          const from = page * PAGE_SIZE;
+          const to = from + PAGE_SIZE - 1;
+
+          const { data: taskBatch, error: taskError } = await supabase
+            .from('tasks')
+            .select('*')
+            .eq('is_deleted', false)
+            .order('due', { ascending: true })
+            .range(from, to);
+
+          if (taskError) {
+            console.error('Tasks error on page', page, taskError);
+            toast('Failed to load tasks');
+            hideLoading();
+            return;
+          }
+
+          if (taskBatch && taskBatch.length > 0) {
+            allTasks = allTasks.concat(taskBatch);
+            console.log(`[LOAD] Fetched task batch ${page + 1}: ${taskBatch.length} tasks (total so far: ${allTasks.length})`);
+          }
+
+          // If we got fewer than PAGE_SIZE, we've reached the end
+          if (!taskBatch || taskBatch.length < PAGE_SIZE) {
+            hasMore = false;
+          } else {
+            page++;
+          }
         }
 
-        console.log('[LOAD] Raw tasks from DB:', tasks.slice(0, 5));
-        const testDC16 = tasks.filter(t => (t.assignee_ids || []).some((id: any) => (id || '').toUpperCase() === 'DC16'));
-        console.log('[LOAD] DC16 Raw Count:', testDC16.length);
+        tasks = allTasks;
+        console.log(`[LOAD] All tasks loaded: ${tasks.length} total`);
+
 
         buildProjectSidebar();
         refreshAssigneeFilters();
@@ -5887,10 +5869,10 @@ export default function ProjectManagerClient() {
       if (editingTask) {
         const project = projects.find((p) => p.id === editingTask.project_id);
 
-        const canEditTask = isAdmin();
+        const canEditTask = isAdmin() || isProjectLeadFor(editingTask.project_id) || editingTask.created_by_id === currentUser?.staff_id;
 
         if (!canEditTask) {
-          toast('Only Admins can edit tasks');
+          toast('Only Admins, Project Leads, or task creators can edit tasks');
           editingTask = null;
           return;
         }
@@ -6048,10 +6030,10 @@ export default function ProjectManagerClient() {
           showLoading(editingTask ? 'Updating task…' : 'Creating task…');
 
           if (editingTask) {
-            const canEdit = isAdmin();
+            const canEdit = isAdmin() || isProjectLeadFor(project.id) || editingTask.created_by_id === currentUser?.staff_id;
 
             if (!canEdit) {
-              toast('Only Admins can edit tasks');
+              toast('Only Admins, Project Leads, or task creators can edit tasks');
               return;
             }
 
@@ -7006,7 +6988,10 @@ export default function ProjectManagerClient() {
     });
 
     btnSubmitForReview && btnSubmitForReview.addEventListener('click', async () => {
-      if (!selectedTask || !currentUser) return;
+      if (!selectedTask || !currentUser) {
+        toast('No task selected or not logged in');
+        return;
+      }
       const btn = btnSubmitForReview as HTMLButtonElement;
       btn.disabled = true;
 
@@ -7014,7 +6999,13 @@ export default function ProjectManagerClient() {
         const isVerReq = requireReview?.checked;
         const remarks = completionRemarks?.value.trim() || '';
         const checkerStaffId = reviewChecker?.value;
-        const checkerUser = allUsers.find(u => u.staff_id === checkerStaffId);
+
+        // Validate: if review is required, a checker must be selected
+        if (isVerReq && !checkerStaffId) {
+          toast('Please select a reviewer to verify this task, or uncheck "Require verification"');
+          btn.disabled = false;
+          return;
+        }
 
         const updatePayload: any = {
           completion_remarks: remarks || null,
@@ -7028,10 +7019,15 @@ export default function ProjectManagerClient() {
         }
 
         const { error } = await supabase.from('tasks').update(updatePayload).eq('id', selectedTask.id);
-        if (error) throw error;
+        if (error) {
+          console.error('Task completion update failed:', error);
+          toast('Failed to update task: ' + (error.message || 'Database error'));
+          btn.disabled = false;
+          return;
+        }
 
         // Log action
-        await supabase.from('task_status_log').insert([{
+        const { error: logError } = await supabase.from('task_status_log').insert([{
           task_id: selectedTask.id,
           action: isVerReq ? 'submitted_for_review' : 'marked_complete',
           from_status: selectedTask.status,
@@ -7040,35 +7036,49 @@ export default function ProjectManagerClient() {
           changed_by_id: currentUser.staff_id,
           changed_by_name: currentUser.name
         }]);
+        if (logError) console.warn('Status log insert failed (non-critical):', logError);
 
         // Notifications
         if (isVerReq && checkerStaffId) {
-          await fetch('/api/notifications/create', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              notifications: [{
-                user_id: checkerStaffId,
-                title: 'Task Awaiting Review',
-                body: `${currentUser.name} submitted "${selectedTask.task}" for review.`,
-                type: 'TASK_SUBMITTED_FOR_REVIEW',
-                link_url: '#tabReview'
-              }]
-            })
-          });
+          try {
+            await fetch('/api/notifications/create', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                notifications: [{
+                  user_id: checkerStaffId,
+                  title: 'Review required: ' + (selectedTask.task || 'Task'),
+                  body: `${currentUser.name} submitted this task for your review.`,
+                  type: 'TASK_ASSIGNED', // Fallback due to DB constraint
+                  link_url: '#tabReview'
+                }]
+              })
+            });
+          } catch (notifErr) {
+            console.warn('Notification send failed (non-critical):', notifErr);
+          }
         }
+
+        // Update local task object for instant feedback
+        selectedTask.status = updatePayload.status;
+        selectedTask.completed_at = updatePayload.completed_at;
+        selectedTask.completed_by = updatePayload.completed_by;
+        if (remarks) selectedTask.completion_remarks = remarks;
 
         hideModal(completionReviewModal);
         toast(isVerReq ? 'Task submitted for review' : 'Task marked complete');
-        await loadDataAfterLogin();
+        renderTasks();
+        renderKanban();
+        updateKanbanCounts();
         refreshReviewTabStatus();
-      } catch (err) {
+      } catch (err: any) {
         console.error('Submit review error', err);
-        toast('Failed to update task');
+        toast('Failed to update task: ' + (err?.message || 'Unknown error'));
       } finally {
         btn.disabled = false;
       }
     });
+
 
     // Review Feedback listeners
     reviewFeedbackCancel && reviewFeedbackCancel.addEventListener('click', () => hideModal(reviewFeedbackModal));
@@ -7106,7 +7116,7 @@ export default function ProjectManagerClient() {
             user_id: aid,
             title: 'Task Review Approved',
             body: `Your task "${selectedTask.task}" has been accepted by ${currentUser.name}.`,
-            type: 'TASK_REVIEW_ACCEPTED',
+            type: 'TASK_ASSIGNED', // Fallback
             link_url: `/tasks/${selectedTask.id}`
           }));
 
@@ -7167,7 +7177,7 @@ export default function ProjectManagerClient() {
             user_id: aid,
             title: 'Revision Requested',
             body: `${currentUser.name} requested revision on "${selectedTask.task}": ${feedback}`,
-            type: 'TASK_REVIEW_REJECTED',
+            type: 'TASK_ASSIGNED', // Fallback
             link_url: `/tasks/${selectedTask.id}`
           }));
 

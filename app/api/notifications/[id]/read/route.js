@@ -23,7 +23,8 @@ function getSupabaseClient() {
 export async function POST(request, { params }) {
   try {
     const supabase = getSupabaseClient();
-    const { id } = params;
+    const resolvedParams = await params;
+    const { id } = resolvedParams;
     const body = await request.json().catch(() => ({}));
     const { userId } = body;
 
