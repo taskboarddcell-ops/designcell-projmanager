@@ -5005,6 +5005,7 @@ export default function ProjectManagerClient() {
             .select('*')
             .eq('is_deleted', false)
             .order('due', { ascending: true })
+            .order('id', { ascending: true }) // Added stable sort to prevent pagination drift
             .range(from, to);
 
           if (taskError) {
@@ -5027,8 +5028,12 @@ export default function ProjectManagerClient() {
           }
         }
 
-        tasks = allTasks;
-        console.log(`[LOAD] All tasks loaded: ${tasks.length} total`);
+        // Final safety: de-duplicate tasks by ID in case of pagination drift
+        const uniqueTasksMap = new Map();
+        allTasks.forEach(t => uniqueTasksMap.set(t.id, t));
+        tasks = Array.from(uniqueTasksMap.values());
+
+        console.log(`[LOAD] All tasks loaded: ${tasks.length} total (after de-duplication)`);
 
 
         buildProjectSidebar();
