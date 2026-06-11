@@ -771,6 +771,12 @@ tr.low {
   color: var(--muted);
 }
 
+.disabled-label {
+  opacity: 0.7;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
 .right {
   display: flex;
   justify-content: flex-end;

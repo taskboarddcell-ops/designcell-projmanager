@@ -411,12 +411,32 @@ const staticHtml = `
             <div style="display:flex;gap:8px;">
               <button id="btnEditLayout" class="btn">✎ Edit Layout</button>
             </div>
-            <button id="btnPrintChecklistDirect" class="btn btn-primary" style="display:flex;align-items:center;gap:6px;">
-              <svg xmlns="http://www.w3.org/2000/svg" height="18" width="18" viewBox="0 -960 960 960" fill="currentColor">
-                <path d="M640-640v-120H320v120h-80v-200h480v200h-80Zm-480 80h640-640Zm560 100q17 0 28.5-11.5T760-500q0-17-11.5-28.5T720-540q-17 0-28.5 11.5T680-500q0 17 11.5 28.5T720-460Zm-80 260v-160H320v160h320Zm80 80H240v-160H80v-240q0-51 35-85.5t85-34.5h560q51 0 85.5 34.5T880-520v240H720v160Zm80-240v-160q0-17-11.5-28.5T760-560H200q-17 0-28.5 11.5T160-520v160h80v-80h480v80h80Z"/>
-              </svg>
-              Print Checklist
-            </button>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <button id="btnExportCSV" class="btn" style="display:flex;align-items:center;gap:6px;">
+                <svg xmlns="http://www.w3.org/2000/svg" height="18" width="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="7 10 12 15 17 10"/>
+                  <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+                Export CSV
+              </button>
+              <button id="btnExportExcel" class="btn" style="display:flex;align-items:center;gap:6px;">
+                <svg xmlns="http://www.w3.org/2000/svg" height="18" width="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                  <line x1="16" y1="13" x2="8" y2="13"/>
+                  <line x1="16" y1="17" x2="8" y2="17"/>
+                  <polyline points="10 9 9 9 8 9"/>
+                </svg>
+                Export Excel
+              </button>
+              <button id="btnPrintChecklistDirect" class="btn btn-primary" style="display:flex;align-items:center;gap:6px;">
+                <svg xmlns="http://www.w3.org/2000/svg" height="18" width="18" viewBox="0 -960 960 960" fill="currentColor">
+                  <path d="M640-640v-120H320v120h-80v-200h480v200h-80Zm-480 80h640-640Zm560 100q17 0 28.5-11.5T760-500q0-17-11.5-28.5T720-540q-17 0-28.5 11.5T680-500q0 17 11.5 28.5T720-460Zm-80 260v-160H320v160h320Zm80 80H240v-160H80v-240q0-51 35-85.5t85-34.5h560q51 0 85.5 34.5T880-520v240H720v160Zm80-240v-160q0-17-11.5-28.5T760-560H200q-17 0-28.5 11.5T160-520v160h80v-80h480v80h80Z"/>
+                </svg>
+                Print Checklist
+              </button>
+            </div>
           </div>
           <div id="projectInfoCard" style="display:none;margin-bottom:8px;position:sticky;top:60px;background:#ffffff;z-index:5;padding-top:12px;padding-bottom:4px;"></div>
           <div id="stagesBox"></div>
@@ -2022,6 +2042,22 @@ export default function ProjectManagerClient() {
       });
     }
 
+    // Export CSV Handler
+    const btnExportCSV = el('btnExportCSV');
+    if (btnExportCSV) {
+      btnExportCSV.addEventListener('click', () => {
+        exportProjectStructure('csv');
+      });
+    }
+
+    // Export Excel Handler
+    const btnExportExcel = el('btnExportExcel');
+    if (btnExportExcel) {
+      btnExportExcel.addEventListener('click', () => {
+        exportProjectStructure('xlsx');
+      });
+    }
+
     const STAGE_ORDER = [
       'Preliminary',
       'Municipal',
@@ -2595,6 +2631,23 @@ export default function ProjectManagerClient() {
         return;
       }
 
+      // Fetch existing tasks to check for duplicates
+      const { data: existingTasks, error: taskError } = await supabase
+        .from('tasks')
+        .select('stage_id, sub_id, task')
+        .eq('project_id', proj.id)
+        .eq('is_deleted', false);
+
+      if (taskError) {
+        console.error('Failed to fetch existing tasks for duplicate check', taskError);
+      }
+
+      const existingMap = new Set();
+      (existingTasks || []).forEach(t => {
+        // Use a composite key same as the partitioning key in SQL
+        existingMap.add(`${t.stage_id || ''}|${t.sub_id || ''}|${t.task}`);
+      });
+
       bulkAssigneesBox.innerHTML = (users || [])
         .map(
           (u) => `
@@ -2620,15 +2673,24 @@ export default function ProjectManagerClient() {
             const subsHtml = subs.length
               ? subs
                 .map(
-                  (sb: string) => `
-                    <label class="chk-line">
+                  (sb: string) => {
+                    const taskTitle = sb || stName || 'Task';
+                    const key = `${stName}|${sb}|${taskTitle}`;
+                    const alreadyExists = existingMap.has(key);
+
+                    return `
+                    <label class="chk-line ${alreadyExists ? 'muted disabled-label' : ''}">
                       <input type="checkbox"
                              class="bulk-sub"
                              data-stage="${esc(stName)}"
-                             data-sub="${esc(sb)}">
-                      <span>${esc(sb)}</span>
+                             data-sub="${esc(sb)}"
+                             ${alreadyExists ? 'disabled' : ''}>
+                      <span ${alreadyExists ? 'style="color:#94a3b8"' : ''}>
+                        ${esc(sb)} ${alreadyExists ? '<small>(already added)</small>' : ''}
+                      </span>
                     </label>
-                  `,
+                  `;
+                  }
                 )
                 .join('')
               : `
@@ -8186,6 +8248,22 @@ export default function ProjectManagerClient() {
 
           const newPlan = readStagePlanFromEditor(stagesBox);
 
+          // SAFETY GUARD: Never overwrite a non-empty stage plan with an empty one.
+          // This prevents accidental data loss if the editor DOM was not fully rendered.
+          const oldPlanHasStages = Array.isArray(oldPlan) && oldPlan.length > 0;
+          if (oldPlanHasStages && newPlan.length === 0) {
+            toast('⚠️ Save blocked: the editor appears empty but this project has existing stages. Please reload and try again.');
+            console.error('[SAFETY] Blocked stage_plan overwrite with empty array', {
+              projectId: layoutEditingProjectId,
+              existingStageCount: oldPlan.length,
+            });
+            layoutEditMode = false;
+            layoutEditingProjectId = null;
+            projectLayoutEditTargetId = null;
+            renderProjectStructure();
+            return;
+          }
+
           // DETECT SUB-STAGE RENAMES AND CASCADE TO TASKS
           const subRenames: { stageName: string; oldSub: string; newSub: string }[] = [];
 
@@ -9812,6 +9890,132 @@ export default function ProjectManagerClient() {
       doc.save(filename);
 
       toast('PDF report downloaded successfully!', 'success');
+    }
+
+    // Export Project Structure function
+    function exportProjectStructure(format: 'xlsx' | 'csv') {
+      const isAllProjects = !activeProjectName;
+      const proj = isAllProjects
+        ? null
+        : projects.find((p: any) => p.name === activeProjectName) || null;
+
+      if (!proj) {
+        toast('Please select a project first');
+        return;
+      }
+
+      const projTasks = tasks.filter((t: any) => t.project_id === proj.id);
+      const dataRows: any[] = [];
+      const matchedTaskIds = new Set<string>();
+      
+      const projectStages = proj.stage_plan || proj.stages || [];
+      projectStages.forEach((stage: any) => {
+        const stageName = typeof stage === 'string' ? stage : (stage.stage || stage.name || stage.title || 'Unknown Stage');
+        const subStages = stage.subs || stage.sub_stages || stage.steps || [];
+        
+        subStages.forEach((subStage: any) => {
+          const subStageName = typeof subStage === 'string' ? subStage : (subStage.name || subStage.title || 'Unknown Sub-stage');
+          const subStageTasks = projTasks.filter((t: any) =>
+            t.project_id === proj.id &&
+            (
+              (t.stage_id === stageName && t.sub_id === subStageName) ||
+              (t.task && t.task.startsWith(subStageName))
+            )
+          );
+          
+          if (subStageTasks.length > 0) {
+            subStageTasks.forEach((task: any) => {
+              matchedTaskIds.add(task.id);
+              const taskTitle = task.task.replace(subStageName + ' - ', '');
+              dataRows.push({
+                'Stage': stageName,
+                'Sub-stage': subStageName,
+                'Task/Sub-stage Title': taskTitle,
+                'Assignees': (task.assignees || []).join(', '),
+                'Due Date': formatDate(task.due),
+                'Status': task.status || 'Pending',
+                'Completion Date': task.completed_at ? formatDate(task.completed_at) : '-',
+                'Created Date': task.created_at ? formatDate(task.created_at) : '-',
+                'Description': task.description || '',
+                'In Plan': 'Yes'
+              });
+            });
+          } else {
+            dataRows.push({
+              'Stage': stageName,
+              'Sub-stage': subStageName,
+              'Task/Sub-stage Title': `${subStageName} (Unassigned)`,
+              'Assignees': '-',
+              'Due Date': '-',
+              'Status': 'Pending Assignment',
+              'Completion Date': '-',
+              'Created Date': '-',
+              'Description': '',
+              'In Plan': 'Yes'
+            });
+          }
+        });
+      });
+      
+      // Unmatched tasks
+      const unmatchedTasks = projTasks.filter((t: any) => !matchedTaskIds.has(t.id));
+      if (unmatchedTasks.length > 0) {
+        unmatchedTasks.forEach((task: any) => {
+          dataRows.push({
+            'Stage': 'Other Tasks (Not in standard plan)',
+            'Sub-stage': '-',
+            'Task/Sub-stage Title': task.task,
+            'Assignees': (task.assignees || []).join(', '),
+            'Due Date': formatDate(task.due),
+            'Status': task.status || 'Pending',
+            'Completion Date': task.completed_at ? formatDate(task.completed_at) : '-',
+            'Created Date': task.created_at ? formatDate(task.created_at) : '-',
+            'Description': task.description || '',
+            'In Plan': 'No'
+          });
+        });
+      }
+
+      // Create worksheet
+      const ws = XLSX.utils.json_to_sheet(dataRows);
+
+      // Set column widths for excel
+      if (format === 'xlsx') {
+        ws['!cols'] = [
+          { wch: 25 }, // Stage
+          { wch: 25 }, // Sub-stage
+          { wch: 35 }, // Task/Sub-stage Title
+          { wch: 20 }, // Assignees
+          { wch: 12 }, // Due Date
+          { wch: 15 }, // Status
+          { wch: 15 }, // Completion Date
+          { wch: 15 }, // Created Date
+          { wch: 40 }, // Description
+          { wch: 10 }  // In Plan
+        ];
+      }
+
+      const timestamp = new Date().toISOString().split('T')[0];
+      const sanitizedProjectName = proj.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+      const filename = `${sanitizedProjectName}_structure_${timestamp}.${format}`;
+
+      if (format === 'csv') {
+        const csvContent = XLSX.utils.sheet_to_csv(ws);
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', filename);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      } else {
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Project Structure');
+        XLSX.writeFile(wb, filename);
+      }
+
+      toast(`${format.toUpperCase()} exported successfully!`, 'success');
     }
 
 
